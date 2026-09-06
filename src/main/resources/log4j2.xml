@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Same structure as the factory webapp's own log4j2.xml (console appender + one shared file
+     appender, per-class Loggers referencing both). One shared file rather than one file per class
+     - PaulaDeployer is a small app, a single logs/pauladeployer.log is easier to tail on Paula
+     than a dozen tiny per-class files. -->
+<Configuration status="DEBUG">
+    <Appenders>
+        <Console name="LogToConsole" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+        <!-- ${sys:catalina.base} rather than a bare relative path "logs/..." - a relative path
+             resolves against whatever directory Tomcat's JVM happened to be started from (e.g.
+             the SSH session's cwd when startup.sh was run), not the Tomcat install itself, which
+             is confusing and inconsistent run to run. catalina.base is a system property Tomcat
+             always sets to its own CATALINA_BASE, so this always lands in
+             ~/pauladeployer/tomcat/logs/ regardless of launch directory. -->
+        <File name="PaulaDeployerLog" fileName="${sys:catalina.base}/logs/pauladeployer.log">
+            <PatternLayout>
+                <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>
+            </PatternLayout>
+        </File>
+    </Appenders>
+    <Loggers>
+        <Logger name="WebAppContextListener" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="PaulaDeployerServlet" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="ProcessingFormHandlerFactory" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="PersistenceManager" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="FirmwareFlasher" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="PaulaSerialLink" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="GetHeaderInfoProcessingHandler" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="InspectProcessingHandler" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="SendCommandProcessingHandler" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="GetDeployQueueProcessingHandler" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="StartDeployProcessingHandler" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Logger name="GetDeployStatusProcessingHandler" level="debug" additivity="false">
+            <AppenderRef ref="LogToConsole"/>
+            <AppenderRef ref="PaulaDeployerLog"/>
+        </Logger>
+        <Root level="debug">
+            <AppenderRef ref="LogToConsole"/>
+        </Root>
+    </Loggers>
+</Configuration>

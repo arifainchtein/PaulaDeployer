@@ -1,0 +1,218 @@
+/* Phone-only - no breakpoints for anything wider, this app is never viewed on a desktop. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #eef0f2;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #212529;
+  color: #fff;
+  padding: 10px 14px;
+  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.pd-header-ips { line-height: 1.4; }
+.pd-header-ips .pd-ip-line { display: block; }
+.pd-header-ips .pd-ip-iface { color: #9ec5fe; margin-right: 6px; }
+
+.pd-info-btn {
+  flex-shrink: 0;
+  margin-left: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #6c757d;
+  background: transparent;
+  color: #adb5bd;
+  font-size: 14px;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1;
+  padding: 0;
+}
+
+.pd-screen { padding: 14px; }
+
+/* Room at the bottom of the main screen so its content never sits under the fixed footer below -
+   confirmed gotcha (2026-09-05): with few tiles (one row), the footer used to just be placed right
+   after the tile grid in normal flow, which put it floating in the middle of a tall screen instead
+   of anchored to the bottom like a real footer. */
+#main-screen { padding-bottom: 88px; }
+
+.pd-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pd-toolbar-btn {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 4px;
+}
+
+.pd-command-response {
+  margin-top: 14px;
+  padding: 10px;
+  background: #0b0f10;
+  color: #4ade80;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 13px;
+  border-radius: 8px;
+  min-height: 40px;
+  max-height: 45vh;
+  max-height: 45dvh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pd-shortcut-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pd-shortcut-btn {
+  flex: 1 1 auto;
+}
+
+.pd-reminder {
+  background: #fff3cd;
+  color: #664d03;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.pd-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.pd-tile {
+  border: none;
+  border-radius: 12px;
+  padding: 16px 10px;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  color: #212529;
+}
+
+.pd-tile-name { font-size: 17px; font-weight: 700; line-height: 1.2; }
+.pd-tile-definition { font-size: 12px; margin-top: 6px; opacity: 0.85; }
+.pd-tile-status-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; font-weight: 700; }
+
+.pd-tile-pending { background: #ffd43b; }
+.pd-tile-running { background: #ffd43b; opacity: 0.6; }
+.pd-tile-success { background: #51cf66; color: #0b3d17; }
+.pd-tile-failed { background: #ff6b6b; color: #4a0d0d; }
+
+.pd-empty-message { color: #6c757d; padding: 20px; text-align: center; font-size: 14px; grid-column: 1 / -1; }
+
+.pd-main-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  background: #eef0f2;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.08);
+  z-index: 10;
+}
+
+.pd-shutdown-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #495057;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+}
+
+.pd-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pd-remove-btn {
+  font-weight: 600;
+  padding: 10px 16px;
+}
+
+.pd-confirm-btn {
+  font-weight: 600;
+  padding: 10px 20px;
+}
+
+.pd-terminal-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.pd-terminal {
+  background: #0b0f10;
+  color: #4ade80;
+  font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 8px;
+  height: calc(100vh - 190px);
+  height: calc(100dvh - 190px); /* iOS Safari: 100vh ignores its own collapsing toolbar, so the
+                                   box ends up taller than what's actually visible and the Return
+                                   button below it lands behind the browser chrome. dvh tracks the
+                                   real visible viewport; the plain vh line above is the fallback
+                                   for browsers that don't support dvh. */
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 14px 0;
+}
+
+.pd-return-btn {
+  width: 100%;
+  font-size: 17px;
+  padding: 12px;
+}
+
+.pd-terminal-status-line {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.pd-terminal-status-running { background: #ffd43b; color: #4a3800; }
+.pd-terminal-status-success { background: #51cf66; color: #0b3d17; }
+.pd-terminal-status-failed { background: #ff6b6b; color: #4a0d0d; }
