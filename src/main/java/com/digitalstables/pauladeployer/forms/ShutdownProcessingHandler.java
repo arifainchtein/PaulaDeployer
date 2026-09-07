@@ -40,28 +40,28 @@ public class ShutdownProcessingHandler extends ProcessingFormHandler{
 			pb.redirectErrorStream(true);
 			Process p = pb.start();
 
-			// A genuine shutdown takes several seconds (stopping services, syncing disks) - this
-			// JVM will be killed partway through that, so we deliberately don't wait for it to
-			// actually finish. But a FAILED sudo (e.g. no passwordless sudo configured, so it has
-			// no TTY to prompt on) exits almost immediately instead - confirmed 2026-09-07, this
-			// used to always report Success regardless, even when the command had already failed
-			// and nothing was ever going to happen. This short wait distinguishes "still running,
-			// genuinely shutting down" from "already failed" without risking a delay anywhere
-			// near long enough for a real shutdown to kill this response first.
-			boolean stillRunning = !p.waitFor(1500, TimeUnit.MILLISECONDS);
+			// Confirmed gotcha (2026-09-07): "shutdown -h now" doesn't block until the machine
+			// actually halts - it just signals systemd and returns almost immediately, success or
+			// failure alike (the several-second delay is the SYSTEM shutting down afterward, not
+			// this command). So "did the process exit quickly" can't distinguish success from
+			// failure - both exit fast. The exit CODE is what actually tells them apart. Waiting up
+			// to 3s is nowhere near long enough for a real shutdown to kill this response first
+			// (that takes several more seconds after the command itself has already returned).
+			boolean exited = p.waitFor(3, TimeUnit.SECONDS);
 			JSONObject data = new JSONObject();
-			if(stillRunning){
-				data.put("message", "Shutdown initiated - this Pi will power off in a few seconds.");
-				toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
-			}else{
+			if(exited && p.exitValue() != 0){
 				StringBuilder output = new StringBuilder();
 				try(BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))){
 					String line;
 					while((line = reader.readLine()) != null) output.append(line).append(" ");
 				}
 				String detail = "exit code " + p.exitValue() + (output.length() > 0 ? ": " + output.toString().trim() : "");
-				logger.warn("Shutdown command exited immediately instead of running - " + detail);
+				logger.warn("Shutdown command failed - " + detail);
 				toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Shutdown command failed (" + detail + ") - is passwordless sudo set up for this user?");
+			}else{
+				// exit code 0, or still running 3s later (unusual but not a failure signal either way)
+				data.put("message", "Shutdown initiated - this Pi will power off in a few seconds.");
+				toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 			}
 		}catch(Exception e){
 			logger.warn(Utils.getStringException(e));
