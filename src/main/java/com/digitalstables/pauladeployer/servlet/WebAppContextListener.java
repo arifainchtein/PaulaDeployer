@@ -49,9 +49,17 @@ public class WebAppContextListener implements ServletContextListener{
 
 	private void checkInWithFactory(){
 		try{
-			String hostname = InetAddress.getLocalHost().getHostName();
+			// Confirmed gotcha (2026-09-09): InetAddress.getLocalHost().getHostName() returns the
+			// bare OS hostname ("paula3"), which has no idea about the .local mDNS suffix this
+			// whole project actually resolves devices by - every other Paula hostname anywhere in
+			// this system (paulaUnit rows, the design doc, provision-pi.sh's own field hotspot
+			// convention) is the .local form. Self-registering with the bare name meant
+			// GetAvailablePaulasProcessingHandler's reachability check couldn't resolve it at all -
+			// looked like "not reachable" even though the Paula genuinely was.
+			String rawHostname = InetAddress.getLocalHost().getHostName();
+			String hostname = rawHostname.endsWith(".local") ? rawHostname : rawHostname + ".local";
 			String query = "formName=CheckInPaula&hostname=" + URLEncoder.encode(hostname, "UTF-8")
-					+ "&name=" + URLEncoder.encode(hostname, "UTF-8");
+					+ "&name=" + URLEncoder.encode(rawHostname, "UTF-8");
 			URL url = new URL(Constants.FACTORY_BASE_URL + "/FactoryServlet");
 			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 			connection.setDoOutput(true);
