@@ -15,9 +15,9 @@
     <!-- Same deploy-on-package pattern as the factory webapp's own pom.xml and
          ~/Data/Aquabubbler/software/lucille's - server.user is Paula's OS user (confirmed "pi"
          from bench sessions), not this dev machine's. -->
-    <server.address>Paula.local</server.address>
+    <server.address>paula2.local</server.address>
     <server.user>pi</server.user>
-    <private.key>/home/pi/.ssh/chilhuacle</private.key>
+    <private.key>/home/ari/.ssh/chilhuacle</private.key>
   </properties>
 
   <dependencies>
@@ -149,4 +149,51 @@
       <!-- =========================================== -->
     </plugins>
   </build>
+
+  <!-- Confirmed gotcha (2026-09-10): running plain "mvn package" ON Paula itself (not from a dev
+       machine) still hit the scp-to-paula execution above, which fails with a JSch error looking
+       for private.key at /home/ari/.ssh/... - that path only exists on Ari's own dev machine, not
+       on the Pi (user "pi", home /home/pi). It's also pointless to SSH into a machine to copy a
+       file to itself. provision-pi.sh already avoids this by building with
+       -Dmaven.antrun.skip=true and cp'ing locally - this profile makes plain "mvn package" do the
+       right thing automatically instead of requiring that flag to be remembered. Activated only
+       when /home/pi/pauladeployer/tomcat/webapps already exists locally (i.e. this IS an
+       already-provisioned Paula), which a dev machine never has - so a normal dev-machine build is
+       unaffected and still scp's as before. -->
+  <profiles>
+    <profile>
+      <id>local-paula-deploy</id>
+      <activation>
+        <file>
+          <exists>/home/pi/pauladeployer/tomcat/webapps</exists>
+        </file>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>1.8</version>
+            <executions>
+              <!-- Same execution id as the scp-to-paula one above - Maven merges this profile's
+                   config on top of it, replacing the scp step with a local copy when active. -->
+              <execution>
+                <id>scp-to-paula</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <echo>Building on Paula itself - copying WAR locally instead of scp.</echo>
+                    <copy file="${project.build.directory}/ROOT.war" tofile="/home/pi/pauladeployer/tomcat/webapps/ROOT.war" overwrite="true" />
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
