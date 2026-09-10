@@ -103,7 +103,25 @@
            (like Paula's Trixie sshd) that disables the legacy ssh-rsa/SHA-1 signature algorithm
            by default, which chilhuacle (an RSA key) needs - hit and fixed for exactly this
            reason in the factory webapp's own runtime dependency, see the design doc §13.1. Must
-           come after maven-war-plugin in this list so the WAR already exists when this runs. -->
+           come after maven-war-plugin in this list so the WAR already exists when this runs.
+
+           Confirmed gotcha (2026-09-10): running plain "mvn package" ON Paula itself (not from a
+           dev machine) used to always hit the scp below, which fails with a JSch error looking
+           for private.key at /home/ari/.ssh/... - that path only exists on Ari's own dev
+           machine, not on the Pi (user "pi", home /home/pi). It's also pointless to SSH into a
+           machine to copy a file to itself. provision-pi.sh avoids this by building with
+           -Dmaven.antrun.skip=true and cp'ing locally instead.
+
+           First attempt at fixing this used a Maven profile (activated by
+           /home/pi/pauladeployer/tomcat/webapps existing locally) declaring a second execution
+           with the same id "scp-to-paula", expecting Maven to merge/override the base
+           execution's config. Confirmed BROKEN in practice (2026-09-10, live on paula2): BOTH
+           executions ran - the local copy succeeded, then the base scp execution also ran and
+           failed the whole build (verified against the real bench Pi, not just inferred from the
+           pom). So instead this all lives in ONE execution/target, using Ant's per-TASK if/unless
+           attributes (core Ant since 1.9.1 - antrun 1.8 bundles Ant 1.9.4, confirmed via this
+           project's own resolved dependency, so it's available) to pick copy vs scp at runtime -
+           no separate execution, no profile-merge behavior to rely on. -->
       <!-- =========================================== -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -118,13 +136,19 @@
             </goals>
             <configuration>
               <target>
+                <condition property="onPaulaPi">
+                  <available file="/home/pi/pauladeployer/tomcat/webapps" type="dir" />
+                </condition>
+                <echo message="Building on Paula itself - copying WAR locally instead of scp." if="onPaulaPi" />
+                <copy file="${project.build.directory}/ROOT.war" tofile="/home/pi/pauladeployer/tomcat/webapps/ROOT.war" overwrite="true" if="onPaulaPi" />
                 <!-- keyfile+passphrase or password, choose one -->
                 <scp localFile="${project.build.directory}/ROOT.war"
                   remoteToFile="${server.user}@${server.address}:/home/pi/pauladeployer/tomcat/webapps/ROOT.war"
                   verbose="true"
                   keyfile="${private.key}"
                   passphrase=""
-                  trust="true">
+                  trust="true"
+                  unless="onPaulaPi">
                 </scp>
               </target>
             </configuration>
@@ -149,51 +173,4 @@
       <!-- =========================================== -->
     </plugins>
   </build>
-
-  <!-- Confirmed gotcha (2026-09-10): running plain "mvn package" ON Paula itself (not from a dev
-       machine) still hit the scp-to-paula execution above, which fails with a JSch error looking
-       for private.key at /home/ari/.ssh/... - that path only exists on Ari's own dev machine, not
-       on the Pi (user "pi", home /home/pi). It's also pointless to SSH into a machine to copy a
-       file to itself. provision-pi.sh already avoids this by building with
-       -Dmaven.antrun.skip=true and cp'ing locally - this profile makes plain "mvn package" do the
-       right thing automatically instead of requiring that flag to be remembered. Activated only
-       when /home/pi/pauladeployer/tomcat/webapps already exists locally (i.e. this IS an
-       already-provisioned Paula), which a dev machine never has - so a normal dev-machine build is
-       unaffected and still scp's as before. -->
-  <profiles>
-    <profile>
-      <id>local-paula-deploy</id>
-      <activation>
-        <file>
-          <exists>/home/pi/pauladeployer/tomcat/webapps</exists>
-        </file>
-      </activation>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-antrun-plugin</artifactId>
-            <version>1.8</version>
-            <executions>
-              <!-- Same execution id as the scp-to-paula one above - Maven merges this profile's
-                   config on top of it, replacing the scp step with a local copy when active. -->
-              <execution>
-                <id>scp-to-paula</id>
-                <phase>package</phase>
-                <goals>
-                  <goal>run</goal>
-                </goals>
-                <configuration>
-                  <target>
-                    <echo>Building on Paula itself - copying WAR locally instead of scp.</echo>
-                    <copy file="${project.build.directory}/ROOT.war" tofile="/home/pi/pauladeployer/tomcat/webapps/ROOT.war" overwrite="true" />
-                  </target>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>
