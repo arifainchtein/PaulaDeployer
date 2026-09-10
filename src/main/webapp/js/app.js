@@ -154,6 +154,144 @@ $(function(){
 		sendCommand('CalibrateCSWReference');
 	});
 
+	// "Test Flow Sensor" - two-step workflow against Paula.ino's LED-guided flow test. Start
+	// arms the device (SetTestMode#Flow then CalibrateFlowSensorXStart) - the operator then
+	// watches the DEVICE's own LEDs (15s red, 5s green) to know when to catch water, not
+	// anything on this screen, so Start's response is just a confirmation, not a live timer.
+	// Once water is caught and measured, Calculate sends the Stop command with that volume and
+	// shows the resulting qfactor.
+	var selectedFlowSensor = '1';
+	$(document).on('click', '.flow-sensor-select-btn', function(){
+		$('.flow-sensor-select-btn').removeClass('active');
+		$(this).addClass('active');
+		selectedFlowSensor = $(this).data('sensor').toString();
+	});
+	$('#test-flow-btn').on('click', function(){
+		$('#flow-test-volume-row').hide();
+		$('#flow-test-volume').val('');
+		$('#flow-test-body').empty();
+		$('#flow-test-start-btn').prop('disabled', false).text('Start Test');
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('flow-test-modal')).show();
+	});
+	$('#flow-test-start-btn').on('click', function(){
+		var btn = $(this);
+		btn.prop('disabled', true).text('Starting...');
+		$('#flow-test-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendCommand", command: "SetTestMode#Flow"},
+			success: function(){
+				$.ajax({
+					type: "POST",
+					url: "PaulaDeployerServlet",
+					data: {formName: "SendCommand", command: "CalibrateFlowSensor" + selectedFlowSensor + "Start"},
+					success: function(raw){
+						var result = JSON.parse(raw);
+						if(result[STATUS_KEY] === STATUS_SUCCESS){
+							var data = JSON.parse(result[DATA_KEY]);
+							$('#flow-test-body').text(data.response);
+							$('#flow-test-volume-row').show();
+							btn.text('Test Started');
+						}else{
+							$('#flow-test-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
+							btn.prop('disabled', false).text('Start Test');
+						}
+					},
+					error: function(){
+						$('#flow-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+						btn.prop('disabled', false).text('Start Test');
+					}
+				});
+			},
+			error: function(){
+				$('#flow-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+				btn.prop('disabled', false).text('Start Test');
+			}
+		});
+	});
+	$('#flow-test-stop-btn').on('click', function(){
+		var mL = $('#flow-test-volume').val();
+		if(!mL || Number(mL) <= 0){
+			alert('Enter the measured volume in mL.');
+			return;
+		}
+		$('#flow-test-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendCommand", command: "CalibrateFlowSensor" + selectedFlowSensor + "Stop#" + mL},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					var data = JSON.parse(result[DATA_KEY]);
+					$('#flow-test-body').text(data.response);
+				}else{
+					$('#flow-test-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
+				}
+			},
+			error: function(){
+				$('#flow-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+			}
+		});
+	});
+
+	// "Test Ultrasonic" - SetTestMode#Ultrasonic switches the device's pin 18 to UART RX, then
+	// GetUltrasonicReading is polled here once a second for a live distance display. Closing the
+	// modal restores Flow mode (see the modal's own comment in index.html) so a later flow test
+	// isn't left broken by pin 18 still being in UART mode.
+	var ultrasonicPollTimer = null;
+	function pollUltrasonicReading(){
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendCommand", command: "GetUltrasonicReading"},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					var data = JSON.parse(result[DATA_KEY]);
+					$('#ultrasonic-test-body').text(data.response);
+				}else{
+					$('#ultrasonic-test-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
+				}
+			},
+			error: function(){
+				$('#ultrasonic-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+			}
+		});
+	}
+	$('#test-ultrasonic-btn').on('click', function(){
+		$('#ultrasonic-test-body').empty();
+		$('#ultrasonic-test-start-btn').prop('disabled', false).text('Start Test').show();
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('ultrasonic-test-modal')).show();
+	});
+	$('#ultrasonic-test-start-btn').on('click', function(){
+		var btn = $(this);
+		btn.prop('disabled', true).text('Starting...');
+		$('#ultrasonic-test-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendCommand", command: "SetTestMode#Ultrasonic"},
+			success: function(){
+				btn.hide();
+				pollUltrasonicReading();
+				ultrasonicPollTimer = setInterval(pollUltrasonicReading, 1000);
+			},
+			error: function(){
+				$('#ultrasonic-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+				btn.prop('disabled', false).text('Start Test');
+			}
+		});
+	});
+	document.getElementById('ultrasonic-test-modal').addEventListener('hidden.bs.modal', function(){
+		if(ultrasonicPollTimer){
+			clearInterval(ultrasonicPollTimer);
+			ultrasonicPollTimer = null;
+			$.ajax({type: "POST", url: "PaulaDeployerServlet", data: {formName: "SendCommand", command: "SetTestMode#Flow"}});
+		}
+	});
+
 	// Copy the command response text (the "black area") to the clipboard, so an operator can
 	// paste it into email/Slack. navigator.clipboard needs a secure context, and this app is
 	// served over plain HTTP, so fall back to a hidden-textarea + execCommand('copy') - and if

@@ -19,6 +19,8 @@
     <button id="inspect-btn" type="button" class="btn btn-info pd-toolbar-btn">Inspect</button>
     <button id="send-command-btn" type="button" class="btn btn-info pd-toolbar-btn">Send Command</button>
     <button id="calibrate-csw-btn" type="button" class="btn btn-warning pd-toolbar-btn">Calibrate CSW</button>
+    <button id="test-flow-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Flow Sensor</button>
+    <button id="test-ultrasonic-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Ultrasonic</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -99,6 +101,60 @@
       </div>
       <div class="modal-footer">
         <button id="copy-command-response-btn" type="button" class="btn btn-success me-auto">Copy</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Flow sensor test/calibration - drives Paula.ino's one-person LED-guided workflow
+     (SetTestMode#Flow, then CalibrateFlowSensorXStart - the operator catches water during the
+     device's own 15s red / 5s green LED sequence, not anything shown here - then
+     CalibrateFlowSensorXStop#<mL> once the volume is measured). -->
+<div class="modal fade" id="flow-test-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Test Flow Sensor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="pd-reminder">Turn the water on <strong>before</strong> starting. Then watch the device's own LEDs, not this screen: 15s red (position your container), then 5s green - catch the water only during the green phase.</div>
+        <div class="pd-shortcut-row">
+          <button type="button" class="btn btn-outline-primary flow-sensor-select-btn active" data-sensor="1">Sensor 1 (pin 18)</button>
+          <button type="button" class="btn btn-outline-primary flow-sensor-select-btn" data-sensor="2">Sensor 2 (pin 33)</button>
+        </div>
+        <button id="flow-test-start-btn" type="button" class="btn btn-primary w-100">Start Test</button>
+        <div id="flow-test-volume-row" class="input-group mt-3" style="display:none;">
+          <input type="number" id="flow-test-volume" class="form-control" placeholder="Measured volume (mL)">
+          <button id="flow-test-stop-btn" type="button" class="btn btn-success">Calculate qfactor</button>
+        </div>
+        <div id="flow-test-body" class="pd-command-response"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ultrasonic sensor test (DYP-A02-V2.0, UART automatic output mode). SetTestMode#Ultrasonic
+     switches Paula.ino's pin 18 from the flow interrupt to UART RX; GetUltrasonicReading is
+     polled here for a live distance display. Closing the modal restores Flow mode so pin 18 is
+     ready for the next flow test. -->
+<div class="modal fade" id="ultrasonic-test-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Test Ultrasonic Sensor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="pd-reminder">DYP-A02-V2.0, UART automatic output mode. Connect its TX lead to pin 18.</div>
+        <button id="ultrasonic-test-start-btn" type="button" class="btn btn-primary w-100">Start Test</button>
+        <div id="ultrasonic-test-body" class="pd-command-response"></div>
+      </div>
+      <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
