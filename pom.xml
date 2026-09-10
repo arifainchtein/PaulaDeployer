@@ -110,18 +110,22 @@
            for private.key at /home/ari/.ssh/... - that path only exists on Ari's own dev
            machine, not on the Pi (user "pi", home /home/pi). It's also pointless to SSH into a
            machine to copy a file to itself. provision-pi.sh avoids this by building with
-           -Dmaven.antrun.skip=true and cp'ing locally instead.
+           -Dmaven.antrun.skip=true and cp'ing locally instead - see the local-paula-deploy
+           profile below, which now does the same thing automatically.
 
-           First attempt at fixing this used a Maven profile (activated by
-           /home/pi/pauladeployer/tomcat/webapps existing locally) declaring a second execution
-           with the same id "scp-to-paula", expecting Maven to merge/override the base
-           execution's config. Confirmed BROKEN in practice (2026-09-10, live on paula2): BOTH
-           executions ran - the local copy succeeded, then the base scp execution also ran and
-           failed the whole build (verified against the real bench Pi, not just inferred from the
-           pom). So instead this all lives in ONE execution/target, using Ant's per-TASK if/unless
-           attributes (core Ant since 1.9.1 - antrun 1.8 bundles Ant 1.9.4, confirmed via this
-           project's own resolved dependency, so it's available) to pick copy vs scp at runtime -
-           no separate execution, no profile-merge behavior to rely on. -->
+           Two earlier attempts at auto-detecting this both failed against the real Pi
+           (2026-09-10, confirmed live on paula2, not just inferred from the pom): (1) a Maven
+           profile declaring a second execution with the same id "scp-to-paula", expecting Maven
+           to merge/override this execution's config - instead BOTH executions ran, local copy
+           succeeded then this scp also ran and failed the build; (2) Ant per-TASK if/unless
+           attributes (e.g. <echo ... if="onPaulaPi">) inside this one target - errored with
+           "echo doesn't support the if attribute", because plain if/unless on arbitrary tasks
+           needs the ant:if/ant:unless namespace form, not this shorthand, and isn't safe to
+           assume for every task. Abandoned both in favor of the officially-documented
+           maven.antrun.skip property (the exact flag provision-pi.sh already uses successfully)
+           plus a completely separate plugin (maven-resources-plugin, not declared anywhere else
+           in this build) for the local copy - no merge-by-id ambiguity, no Ant version/feature
+           guessing. -->
       <!-- =========================================== -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -136,19 +140,13 @@
             </goals>
             <configuration>
               <target>
-                <condition property="onPaulaPi">
-                  <available file="/home/pi/pauladeployer/tomcat/webapps" type="dir" />
-                </condition>
-                <echo message="Building on Paula itself - copying WAR locally instead of scp." if="onPaulaPi" />
-                <copy file="${project.build.directory}/ROOT.war" tofile="/home/pi/pauladeployer/tomcat/webapps/ROOT.war" overwrite="true" if="onPaulaPi" />
                 <!-- keyfile+passphrase or password, choose one -->
                 <scp localFile="${project.build.directory}/ROOT.war"
                   remoteToFile="${server.user}@${server.address}:/home/pi/pauladeployer/tomcat/webapps/ROOT.war"
                   verbose="true"
                   keyfile="${private.key}"
                   passphrase=""
-                  trust="true"
-                  unless="onPaulaPi">
+                  trust="true">
                 </scp>
               </target>
             </configuration>
@@ -173,4 +171,53 @@
       <!-- =========================================== -->
     </plugins>
   </build>
+
+  <!-- Activated only when /home/pi/pauladeployer/tomcat/webapps already exists locally - true
+       only on an already-provisioned Paula, never on a dev machine. maven.antrun.skip=true here
+       disables the scp-to-paula execution above entirely (the same officially-supported flag
+       provision-pi.sh already passes by hand as -Dmaven.antrun.skip=true), and
+       maven-resources-plugin (a separate plugin, not otherwise used in this build, so no
+       merge-with-base-declaration ambiguity) copies the WAR straight into place instead. -->
+  <profiles>
+    <profile>
+      <id>local-paula-deploy</id>
+      <activation>
+        <file>
+          <exists>/home/pi/pauladeployer/tomcat/webapps</exists>
+        </file>
+      </activation>
+      <properties>
+        <maven.antrun.skip>true</maven.antrun.skip>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>copy-war-locally</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>/home/pi/pauladeployer/tomcat/webapps</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${project.build.directory}</directory>
+                      <includes>
+                        <include>ROOT.war</include>
+                      </includes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
