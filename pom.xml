@@ -17,7 +17,7 @@
          from bench sessions), not this dev machine's. -->
     <server.address>Paula.local</server.address>
     <server.user>pi</server.user>
-    <private.key>/home/ari/.ssh/chilhuacle</private.key>
+    <private.key>/home/pi/.ssh/chilhuacle</private.key>
   </properties>
 
   <dependencies>
