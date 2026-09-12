@@ -120,6 +120,7 @@ $(function(){
 	$('#send-command-btn').on('click', function(){
 		$('#send-command-title').text('Send Command');
 		$('#calibrate-csw-reminder').hide();
+		$('#i2c-temp-reminder').hide();
 		$('#send-command-shortcuts').show();
 		$('#send-command-text').val('').prop('readonly', false);
 		$('#send-command-body').empty();
@@ -147,11 +148,26 @@ $(function(){
 	$('#calibrate-csw-btn').on('click', function(){
 		$('#send-command-title').text('Calibrate CSW');
 		$('#calibrate-csw-reminder').show();
+		$('#i2c-temp-reminder').hide();
 		$('#send-command-shortcuts').hide();
 		$('#send-command-text').val('CalibrateCSWReference').prop('readonly', true);
 		$('#send-command-body').html('<div class="pd-empty-message">Talking to the device...</div>');
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
 		sendCommand('CalibrateCSWReference');
+	});
+
+	// "Test I2C Temp" - fixed command, auto-sent the moment the modal opens, same pattern as
+	// Calibrate CSW. One-shot (no LED sequence, no pin-sharing mode switch needed - the SHT3x
+	// is on the I2C bus, independent of the flow/ultrasonic tests on pins 18/33).
+	$('#test-i2c-temp-btn').on('click', function(){
+		$('#send-command-title').text('Test I2C Temp');
+		$('#calibrate-csw-reminder').hide();
+		$('#i2c-temp-reminder').show();
+		$('#send-command-shortcuts').hide();
+		$('#send-command-text').val('TestI2CTemperatureSensor').prop('readonly', true);
+		$('#send-command-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
+		sendCommand('TestI2CTemperatureSensor');
 	});
 
 	// "Test Flow Sensor" - two-step workflow against Paula.ino's LED-guided flow test. Start

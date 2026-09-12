@@ -21,6 +21,7 @@
     <button id="calibrate-csw-btn" type="button" class="btn btn-warning pd-toolbar-btn">Calibrate CSW</button>
     <button id="test-flow-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Flow Sensor</button>
     <button id="test-ultrasonic-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Ultrasonic</button>
+    <button id="test-i2c-temp-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test I2C Temp</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -88,6 +89,7 @@
       </div>
       <div class="modal-body">
         <div id="calibrate-csw-reminder" class="pd-reminder" style="display:none;">This only <strong>arms</strong> calibration - with the device's switches at <strong>00000</strong>, it now needs a <strong>reset</strong> for the new reference value to actually be captured.</div>
+        <div id="i2c-temp-reminder" class="pd-reminder" style="display:none;">SHT3x temperature/humidity sensor, expected at I2C address <strong>0x44</strong>. "Not detected" means it isn't answering on the I2C bus at all - check wiring before assuming the part is bad.</div>
         <div id="send-command-shortcuts" class="pd-shortcut-row">
           <button type="button" class="btn btn-outline-primary btn-sm pd-shortcut-btn" data-command="GetTime">GetTime</button>
           <button type="button" class="btn btn-outline-primary btn-sm pd-shortcut-btn" data-command="printCSWData">CSWData</button>
