@@ -24,7 +24,7 @@ import com.digitalstables.pauladeployer.utils.Utils;
 // Kicks off a flash and returns immediately with an attemptId - GetDeployStatusProcessingHandler
 // polls that id while the actual flash runs on a background thread (a phone request can't stay
 // open for the whole minute-plus a flash takes). Only extracts the two firmware binaries
-// (<repo>.ino.bin / <repo>.ino.partitions.bin) from the deploy package zip - not its bundled
+// (<repo>.ino.bin / <repo>.ino.partitions.bin, plus <repo>.www.bin when the device has a website) from the deploy package zip - not its bundled
 // esptool.py/bootloader/boot_app0, since this Pi already has its own copies of those at the same
 // path convention (fetched by provision-pi.sh, see FirmwareFlasher's ESPTOOL_PATH etc.), matching
 // how PaulaUploader's own FirmwareFlasher already works.
@@ -101,7 +101,11 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			aDBManager.appendLog(attemptId, "Extracting firmware from " + zipFile.getName() + "...");
 			String binFileName = repoName + ".ino.bin";
 			String partitionsFileName = repoName + ".ino.partitions.bin";
-			extractEntries(zipFile, workDir, binFileName, partitionsFileName);
+			String wwwFileName = repoName + ".www.bin";
+			extractEntries(zipFile, workDir, binFileName, partitionsFileName, wwwFileName);
+			if(new File(workDir, wwwFileName).isFile()){
+				aDBManager.appendLog(attemptId, "Package includes the device's website (www partition) - will flash it too.");
+			}
 
 			File binFile = new File(workDir, binFileName);
 			File partitionsFile = new File(workDir, partitionsFileName);
