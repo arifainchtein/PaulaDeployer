@@ -22,6 +22,7 @@
     <button id="test-flow-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Flow Sensor</button>
     <button id="test-ultrasonic-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Ultrasonic</button>
     <button id="test-i2c-temp-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test I2C Temp</button>
+    <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -155,6 +156,32 @@
         <div class="pd-reminder">Make sure the jumper is on the <strong>digital</strong> header. DYP-A02-V2.0, UART automatic output mode - connect its TX lead to pin 18.</div>
         <button id="ultrasonic-test-start-btn" type="button" class="btn btn-primary w-100">Start Test</button>
         <div id="ultrasonic-test-body" class="pd-command-response"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tank pressure sensor test (0.5V-4.5V/0-5psi transducer via the ADS1115, same screw terminal
+     as the flow sensors but the ANALOG jumper position instead of digital). One-shot, like Test
+     I2C Temp - no LED sequence, no mode switch, just picks which sensor's channel to read. -->
+<div class="modal fade" id="pressure-test-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Test Tank Pressure</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="pd-reminder">Make sure the jumper is on the <strong>analog</strong> header (opposite of the flow/ultrasonic tests). 0.5V-4.5V/0-5psi transducer - a near-0V reading usually means disconnected/faulty, not truly 0psi.</div>
+        <div class="pd-shortcut-row">
+          <button type="button" class="btn btn-outline-primary pressure-sensor-select-btn active" data-sensor="1">Sensor 1 (pin 18)</button>
+          <button type="button" class="btn btn-outline-primary pressure-sensor-select-btn" data-sensor="2">Sensor 2 (pin 33)</button>
+        </div>
+        <button id="pressure-test-run-btn" type="button" class="btn btn-primary w-100">Run Test</button>
+        <div id="pressure-test-body" class="pd-command-response"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

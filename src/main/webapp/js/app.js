@@ -308,6 +308,41 @@ $(function(){
 		}
 	});
 
+	// "Test Tank Pressure" - one-shot, same sensor-select pattern as "Test Flow Sensor" but no
+	// Start/Stop workflow needed (no LED sequence, no SetTestMode - the ADS1115 read is
+	// independent of the flow/ultrasonic pin-sharing mode switch, gated only by the physical
+	// analog/digital jumper, which is what the reminder banner is for).
+	var selectedPressureSensor = '1';
+	$(document).on('click', '.pressure-sensor-select-btn', function(){
+		$('.pressure-sensor-select-btn').removeClass('active');
+		$(this).addClass('active');
+		selectedPressureSensor = $(this).data('sensor').toString();
+	});
+	$('#test-pressure-btn').on('click', function(){
+		$('#pressure-test-body').empty();
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('pressure-test-modal')).show();
+	});
+	$('#pressure-test-run-btn').on('click', function(){
+		$('#pressure-test-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendCommand", command: "TestTankPressureSensor" + selectedPressureSensor},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					var data = JSON.parse(result[DATA_KEY]);
+					$('#pressure-test-body').text(data.response);
+				}else{
+					$('#pressure-test-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
+				}
+			},
+			error: function(){
+				$('#pressure-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+			}
+		});
+	});
+
 	// Copy the command response text (the "black area") to the clipboard, so an operator can
 	// paste it into email/Slack. navigator.clipboard needs a secure context, and this app is
 	// served over plain HTTP, so fall back to a hidden-textarea + execCommand('copy') - and if
