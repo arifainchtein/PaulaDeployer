@@ -343,6 +343,38 @@ $(function(){
 		});
 	});
 
+	// "Test Soil Sensor" - one-shot ReadSoilSensor#<address>, like Test Tank Pressure. The address
+	// is validated here as well as on the device so a typo doesn't cost a serial round trip.
+	$('#test-soil-btn').on('click', function(){
+		$('#soil-test-body').empty();
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('soil-test-modal')).show();
+	});
+	$('#soil-test-run-btn').on('click', function(){
+		var address = parseInt($('#soil-test-address').val(), 10);
+		if(isNaN(address) || address < 0 || address > 247){
+			$('#soil-test-body').html('<div class="text-danger">Sensor address must be a number from 0 to 247.</div>');
+			return;
+		}
+		$('#soil-test-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendCommand", command: "ReadSoilSensor#" + address},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					var data = JSON.parse(result[DATA_KEY]);
+					$('#soil-test-body').text(data.response);
+				}else{
+					$('#soil-test-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
+				}
+			},
+			error: function(){
+				$('#soil-test-body').html('<div class="text-danger">Request failed - is the device plugged in?</div>');
+			}
+		});
+	});
+
 	// Copy the command response text (the "black area") to the clipboard, so an operator can
 	// paste it into email/Slack. navigator.clipboard needs a secure context, and this app is
 	// served over plain HTTP, so fall back to a hidden-textarea + execCommand('copy') - and if
@@ -376,6 +408,30 @@ $(function(){
 		var deviceName = $(this).find('.pd-tile-name').text();
 		var definitionLabel = $(this).find('.pd-tile-definition').text();
 		startDeploy(manifestFile, deviceName, definitionLabel);
+	});
+
+	$(document).on('click', '.pd-tile-remove', function(){
+		var btn = $(this);
+		if(!confirm('Remove the failed deployment for ' + btn.data('name') + ' from this Paula? This deletes its files here - send the deploy package again from the factory webapp to retry.')) return;
+		btn.prop('disabled', true);
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "RemoveDeployPackage", manifestFile: btn.data('manifest')},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					loadQueue();
+				}else{
+					btn.prop('disabled', false);
+					alert('Could not remove: ' + result[DATA_KEY]);
+				}
+			},
+			error: function(){
+				btn.prop('disabled', false);
+				alert('Request failed.');
+			}
+		});
 	});
 
 	$('#return-btn').on('click', function(){
@@ -451,11 +507,17 @@ function renderQueue(queue){
 		else if(tile.tileStatus === 'Failed'){ statusClass = 'pd-tile-failed'; badge = 'Failed - tap to retry'; }
 		if(tile.tileStatus === 'Success' && tile.reported) hasConfirmed = true;
 
+		html += '<div class="pd-tile-wrap">';
 		html += '<button type="button" class="pd-tile ' + statusClass + '" data-manifest="' + escapeHtml(tile.manifestFile) + '" data-status="' + tile.tileStatus + '">';
 		html += '<span class="pd-tile-name">' + escapeHtml(tile.productName) + '</span>';
 		html += '<span class="pd-tile-definition">' + escapeHtml(tile.productDefinitionLabel) + '</span>';
 		if(badge) html += '<span class="pd-tile-status-badge">' + badge + '</span>';
 		html += '</button>';
+		// Failed tiles get their own remove "x" - the footer Remove only clears confirmed successes
+		if(tile.tileStatus === 'Failed'){
+			html += '<button type="button" class="pd-tile-remove" title="Remove this failed deployment" data-manifest="' + escapeHtml(tile.manifestFile) + '" data-name="' + escapeHtml(tile.productName) + '">&times;</button>';
+		}
+		html += '</div>';
 	});
 	$('#tile-grid').html(html);
 	$('#remove-confirmed-btn').toggle(hasConfirmed);

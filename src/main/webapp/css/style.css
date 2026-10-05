@@ -129,6 +129,23 @@ html, body {
 .pd-tile-success { background: #51cf66; color: #0b3d17; }
 .pd-tile-failed { background: #ff6b6b; color: #4a0d0d; }
 
+.pd-tile-wrap { position: relative; display: flex; }
+.pd-tile-wrap .pd-tile { flex: 1; }
+.pd-tile-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(74,13,13,0.85);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+}
+
 .pd-empty-message { color: #6c757d; padding: 20px; text-align: center; font-size: 14px; grid-column: 1 / -1; }
 
 .pd-main-footer {

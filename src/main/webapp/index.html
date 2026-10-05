@@ -23,6 +23,7 @@
     <button id="test-ultrasonic-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Ultrasonic</button>
     <button id="test-i2c-temp-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test I2C Temp</button>
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
+    <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -182,6 +183,34 @@
         </div>
         <button id="pressure-test-run-btn" type="button" class="btn btn-primary w-100">Run Test</button>
         <div id="pressure-test-body" class="pd-command-response"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RS485 7-in-1 soil sensor test (Modbus-RTU: temperature, moisture, EC, salt, N, P, K, pH).
+     One-shot ReadSoilSensor#<address>, same shape as Test Tank Pressure. Only Paula2.ino (the
+     build 2 board with the MAX485E) implements it; the build 1 Paula.ino answers "Failure-Command
+     Not Found-ReadSoilSensor#..." immediately, which is shown as-is. -->
+<div class="modal fade" id="soil-test-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Test Soil Sensor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="pd-reminder">RS485 7-in-1 soil probe (Modbus-RTU, 9600 8N1) on the <strong>RS485</strong> terminal: GND, VDD, A, B. Needs <strong>Paula build 2</strong> - build 1 has no RS485. Sensor power is 3.3V-24V, so check the VDD terminal voltage first. Push the probe fully into soil; pH needs over 5 minutes after first power-up to settle.</div>
+        <div class="input-group mb-3">
+          <span class="input-group-text">Sensor address</span>
+          <input type="number" id="soil-test-address" class="form-control" value="2" min="0" max="247">
+        </div>
+        <div class="form-text mb-3">Factory default is 2. Use 0 (broadcast) to discover an unknown address, with only this one sensor connected.</div>
+        <button id="soil-test-run-btn" type="button" class="btn btn-primary w-100">Run Test</button>
+        <div id="soil-test-body" class="pd-command-response"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

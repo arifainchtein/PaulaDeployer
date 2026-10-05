@@ -109,7 +109,19 @@ public class FirmwareFlasher {
 		pb.redirectErrorStream(true);
 		Process p = pb.start();
 
-		BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+		// esptool prints its "Connecting........_____" dots with no newline until the attempt ends,
+		// so a line-at-a-time read shows nothing for the whole PROGRAM window. Read live, and - since
+		// onLine appends a row to the deploy log the phone polls - report progress every few seconds
+		// rather than once per dot.
+		final long[] lastConnectingReport = {System.currentTimeMillis()};
+		final long connectingStart = lastConnectingReport[0];
+		LiveLineReader reader = new LiveLineReader(new InputStreamReader(p.getInputStream()), partial -> {
+			long now = System.currentTimeMillis();
+			if (partial.startsWith("Connecting") && now - lastConnectingReport[0] >= 5000) {
+				lastConnectingReport[0] = now;
+				onLine.accept("Still waiting for the board to enter programming mode (" + ((now - connectingStart) / 1000) + "s)...");
+			}
+		});
 		String line;
 		while ((line = reader.readLine()) != null) {
 			onLine.accept(line);
