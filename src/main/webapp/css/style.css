@@ -23,19 +23,18 @@ html, body {
   z-index: 10;
 }
 
-.pd-header-left { min-width: 0; }
-.pd-header-time-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.pd-header-time { font-variant-numeric: tabular-nums; }
-.pd-header-time.pd-time-unsynced { color: #ffc107; }
-.pd-internet-time-btn {
-  border: 1px solid #6c757d;
-  background: transparent;
-  color: #9ec5fe;
-  border-radius: 4px;
-  font-size: 12px;
-  padding: 1px 8px;
+/* Second header column, right of the wlan IPs: Pi clock on top, its Set Time button below. */
+.pd-header-clock {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-left: 16px;
 }
-.pd-internet-time-btn:disabled { opacity: 0.6; }
+.pd-header-time { font-variant-numeric: tabular-nums; line-height: 1.4; }
+.pd-header-time.pd-time-unsynced { color: #ffc107; }
+.pd-header-time-btn { font-size: 12px; padding: 1px 10px; }
 
 .pd-header-ips { line-height: 1.4; }
 .pd-header-ips .pd-ip-line { display: block; }

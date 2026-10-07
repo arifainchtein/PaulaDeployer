@@ -19,7 +19,7 @@ $(function(){
 			data: {formName: "SyncInternetTime"},
 			success: function(raw){
 				var result = JSON.parse(raw);
-				btn.prop('disabled', false).text('Internet Time');
+				btn.prop('disabled', false).text('Set Time');
 				if(result[STATUS_KEY] === STATUS_SUCCESS){
 					var data = JSON.parse(result[DATA_KEY]);
 					updatePiClock(data);
@@ -29,7 +29,7 @@ $(function(){
 				}
 			},
 			error: function(){
-				btn.prop('disabled', false).text('Internet Time');
+				btn.prop('disabled', false).text('Set Time');
 				alert('Request failed.');
 			}
 		});
@@ -39,7 +39,7 @@ $(function(){
 	$('#set-time-btn').on('click', function(){
 		var question = 'Set the device clock to ' + formatPiTime() + '?';
 		if(piNtpSynchronized === false){
-			question = 'The Pi clock has NOT been synced from the internet - it may be wrong. Press Internet Time first if you can.\n\n' + question;
+			question = 'The Pi clock has NOT been synced from the internet - it may be wrong. Press Set Time in the black header first if you can.\n\n' + question;
 		}
 		if(!confirm(question)) return;
 		var btn = $(this);
