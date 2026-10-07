@@ -14,8 +14,10 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #2a670e;  /* lighter DigitalStables green - background of logos/Digital Stables Round Logo variations.png (1 and 4) */
-  color: #fff;
+  background: #fff;
+  color: #212529;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   padding: 8px 10px;
   font-size: 13px;
   position: sticky;
@@ -23,7 +25,7 @@ html, body {
   z-index: 10;
 }
 
-/* Second header column, right of the wlan IPs: Pi clock on top, its Set Time button below. */
+/* Header column right of the logo: Pi clock on top, its Set Pi Time button below. */
 .pd-header-clock {
   flex: 1;
   display: flex;
@@ -33,8 +35,14 @@ html, body {
   margin-left: 12px;
 }
 .pd-header-time { font-variant-numeric: tabular-nums; line-height: 1.4; white-space: nowrap; }
-.pd-header-time.pd-time-unsynced { color: #ffd54f; }
+.pd-header-time.pd-time-unsynced { color: #b45309; }
 .pd-header-time-btn { font-size: 13px; font-weight: 600; padding: 7px 14px; }  /* finger-sized - phone only */
+/* DigitalStables green (logos/Digital Stables Round Logo variations.png), white text */
+.pd-header-time-btn.btn-ds-green { background: #2a670e; border-color: #2a670e; color: #fff; }
+.pd-header-time-btn.btn-ds-green:hover,
+.pd-header-time-btn.btn-ds-green:active,
+.pd-header-time-btn.btn-ds-green:focus { background: #1f5f02; border-color: #1f5f02; color: #fff; }
+.pd-header-time-btn.btn-ds-green:disabled { background: #2a670e; border-color: #2a670e; color: #fff; opacity: 0.65; }
 
 .pd-info-ips { font-size: 16px; line-height: 1.6; margin-bottom: 12px; }
 .pd-info-ips .pd-ip-line { display: block; }
@@ -49,9 +57,9 @@ html, body {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid #c5e8a6;
+  border: 1px solid #2a670e;
   background: transparent;
-  color: #e6f4d9;
+  color: #2a670e;
   font-size: 14px;
   font-style: italic;
   font-family: Georgia, "Times New Roman", serif;
