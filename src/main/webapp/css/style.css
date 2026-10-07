@@ -14,7 +14,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #1f5f02;  /* DigitalStables logo green (logos/PreferedGreen.png) */
+  background: #2a670e;  /* lighter DigitalStables green - background of logos/Digital Stables Round Logo variations.png (1 and 4) */
   color: #fff;
   padding: 8px 10px;
   font-size: 13px;
