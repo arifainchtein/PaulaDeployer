@@ -31,6 +31,8 @@ import com.digitalstables.pauladeployer.utils.Utils;
 public class StartDeployProcessingHandler extends ProcessingFormHandler{
 
 	private static final Logger logger = LogManager.getLogger("StartDeployProcessingHandler");
+	private static final int POST_FLASH_PING_ATTEMPTS = 4;
+	private static final long POST_FLASH_PING_RETRY_MILLIS = 3000;
 
 	public StartDeployProcessingHandler(HttpServletRequest req, HttpServletResponse res, ServletContext servletContext) throws ServletException{
 		super(req, res, servletContext);
@@ -68,6 +70,10 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			// PersistenceManager's startAttempt/getUnreportedAttempts comments for what that means
 			// for the "Confirm" footer button later.
 			int productDefinitionId = manifest.optInt("productDefinitionId");
+			// Product definition name (e.g. "Daffodil V8") - written into the device's own product
+			// definition after a good flash. "" for manifests from before the factory sent it, in
+			// which case the device keeps its current name.
+			String productDefinitionName = manifest.optString("productDefinitionName", "");
 
 			PersistenceManager aDBManager = (PersistenceManager) servletContext.getAttribute("DBManager");
 			int attemptId = aDBManager.startAttempt(manifestFileName, productId, productName, serialNumber, repoName, version, productDefinitionId);
@@ -77,7 +83,7 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			}
 			logger.info("Created deployAttempt id=" + attemptId + " for product=" + productName + " (" + repoName + " v" + version + ") - starting background flash thread");
 
-			Thread worker = new Thread(() -> runDeploy(aDBManager, attemptId, zipFile, repoName, version));
+			Thread worker = new Thread(() -> runDeploy(aDBManager, attemptId, zipFile, repoName, version, productDefinitionName));
 			worker.setDaemon(true);
 			worker.start();
 
@@ -91,7 +97,7 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 		return toReturn;
 	}
 
-	private void runDeploy(PersistenceManager aDBManager, int attemptId, File zipFile, String repoName, int version){
+	private void runDeploy(PersistenceManager aDBManager, int attemptId, File zipFile, String repoName, int version, String productDefinitionName){
 		logger.info("Background flash thread started for attemptId=" + attemptId);
 		boolean success = false;
 		try{
@@ -129,11 +135,23 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			}
 
 			aDBManager.appendLog(attemptId, "Flash complete. Pinging the device...");
-			String pingResult = flasher.pingTarget(true);
+			// Confirmed gotcha 2026-10-07: the first Ping goes out while the freshly flashed board is
+			// still booting, gets lost, and pingTarget() returns the boot output ("LittleFS Mount
+			// Succces...") - every deploy since 2026-10-05 was flagged failed that way, and the
+			// firmware label update below never ran. Retry once the boot output has gone by.
+			String pingResult = null;
+			for(int attempt = 1; attempt <= POST_FLASH_PING_ATTEMPTS; attempt++){
+				pingResult = flasher.pingTarget(true);
+				if(pingResult != null && pingResult.contains("Ok")) break;
+				if(attempt < POST_FLASH_PING_ATTEMPTS){
+					aDBManager.appendLog(attemptId, "No Ping reply yet (device still booting?) - retrying (" + (attempt + 1) + "/" + POST_FLASH_PING_ATTEMPTS + ")...");
+					Thread.sleep(POST_FLASH_PING_RETRY_MILLIS);
+				}
+			}
 			if(pingResult != null && pingResult.contains("Ok")){
 				aDBManager.appendLog(attemptId, "Ping OK - device is alive and running the new firmware.");
 				success = true;
-				updateFirmwareLabelOnDevice(flasher, aDBManager, attemptId, repoName, version);
+				updateFirmwareLabelOnDevice(flasher, aDBManager, attemptId, repoName, version, productDefinitionName);
 			}else{
 				logger.warn("attemptId=" + attemptId + " - post-flash Ping did not return Ok (got: " + pingResult + ")");
 				aDBManager.appendLog(attemptId, "Device did not respond to Ping after flashing - flagging as failed.");
@@ -158,7 +176,7 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 	// other four fields back first and resend them unchanged, since SetProductDefinition takes all
 	// five positionally and firmware is the only one this deploy actually knows a new value for.
 	// Best-effort: failure here does not fail the deploy attempt, the flash itself already succeeded.
-	private void updateFirmwareLabelOnDevice(FirmwareFlasher flasher, PersistenceManager aDBManager, int attemptId, String repoName, int version){
+	private void updateFirmwareLabelOnDevice(FirmwareFlasher flasher, PersistenceManager aDBManager, int attemptId, String repoName, int version, String productDefinitionName){
 		try{
 			String getResult = flasher.sendCommandToTarget("GetProductDefinition", true);
 			if(getResult == null || !getResult.contains("Ok-GetProductDefinition")){
@@ -168,6 +186,7 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			}
 			String[] parts = getResult.split("#");
 			String name = parts.length > 1 ? parts[1] : "";
+			if(productDefinitionName != null && !productDefinitionName.isEmpty()) name = productDefinitionName;
 			String powerSource = parts.length > 2 ? parts[2] : "";
 			String battery = parts.length > 3 ? parts[3] : "";
 			String pcbs = parts.length > 4 ? parts[4] : "";
@@ -177,7 +196,7 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			String setResult = flasher.sendCommandToTarget(setCommand, true);
 			if(setResult != null && setResult.contains("Ok-SetProductDefinition")){
 				logger.info("attemptId=" + attemptId + " - updated device firmware label to '" + newFirmwareLabel + "'");
-				aDBManager.appendLog(attemptId, "Updated the device's firmware label to \"" + newFirmwareLabel + "\".");
+				aDBManager.appendLog(attemptId, "Updated the device's product definition to \"" + name + "\", firmware \"" + newFirmwareLabel + "\".");
 			}else{
 				logger.warn("attemptId=" + attemptId + " - SetProductDefinition did not confirm (got: " + setResult + ")");
 				aDBManager.appendLog(attemptId, "Could not confirm the device's firmware label was updated - not fatal.");

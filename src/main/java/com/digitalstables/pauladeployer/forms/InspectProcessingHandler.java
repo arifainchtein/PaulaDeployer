@@ -38,7 +38,7 @@ public class InspectProcessingHandler extends ProcessingFormHandler{
 			}
 			logger.debug("Inspect raw response: " + result);
 
-			// Ok-GetProductDefinition#name#powerSource#battery#pcbs#firmware#commissiondate#ssid#wifiPassword#softApSsid#softApPassword#hostName#stationMode#currenttime#deviceName#deviceShortName#serialNumber
+			// Ok-GetProductDefinition#name#powerSource#battery#pcbs#firmware#commissiondate#ssid#wifiPassword#softApSsid#softApPassword#hostName#stationMode#currenttime#deviceName#deviceShortName#serialNumber#labelBuild#runningBuild
 			String[] parts = result.split("#");
 
 			JSONObject data = new JSONObject();
@@ -58,6 +58,11 @@ public class InspectProcessingHandler extends ProcessingFormHandler{
 			data.put("deviceName", parts.length>14?parts[14]:"");
 			data.put("deviceShortName", parts.length>15?parts[15]:"");
 			data.put("serialNumber", parts.length>16?parts[16]:"");
+			// Added 2026-10-07 (Daffodil): #labelBuild#runningBuild - the build stamp (YYMMDDhh) running
+			// when the firmware label was saved, and the one running now. Different = the label is stale
+			// (flashed without SetProductDefinition). Missing on older firmware.
+			data.put("labelBuild", parts.length>17?parts[17].trim():"");
+			data.put("runningBuild", parts.length>18?parts[18].trim():"");
 
 			toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 		}catch(Exception e){

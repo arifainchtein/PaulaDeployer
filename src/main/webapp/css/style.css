@@ -229,8 +229,8 @@ html, body {
   line-height: 1.5;
   padding: 12px;
   border-radius: 8px;
-  height: calc(100vh - 190px);
-  height: calc(100dvh - 190px); /* iOS Safari: 100vh ignores its own collapsing toolbar, so the
+  height: calc(100vh - 260px);  /* 260 = logo header + title + status line + Copy/Return row (2026-10-07) */
+  height: calc(100dvh - 260px); /* iOS Safari: 100vh ignores its own collapsing toolbar, so the
                                    box ends up taller than what's actually visible and the Return
                                    button below it lands behind the browser chrome. dvh tracks the
                                    real visible viewport; the plain vh line above is the fallback
@@ -241,11 +241,21 @@ html, body {
   margin: 0 0 14px 0;
 }
 
-.pd-return-btn {
-  width: 100%;
+.pd-terminal-buttons { display: flex; gap: 8px; }
+.pd-copy-terminal-btn {
+  flex: 0 0 30%;
   font-size: 17px;
   padding: 12px;
 }
+.pd-return-btn {
+  flex: 1;
+  font-size: 17px;
+  padding: 12px;
+}
+
+.pd-fw-current { color: #2a670e; font-weight: 600; white-space: nowrap; }
+.pd-fw-stale { color: #b45309; font-weight: 600; }
+.pd-fw-stale-note { color: #b45309; font-size: 13px; }
 
 .pd-terminal-status-line {
   padding: 8px 12px;

@@ -6,7 +6,7 @@
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.6.0">
+<link rel="stylesheet" href="css/style.css?v=0.7.1">
 </head>
 <body>
 
@@ -68,7 +68,11 @@
 <div id="terminal-screen" class="pd-screen" style="display:none;">
   <div id="terminal-title" class="pd-terminal-title"></div>
   <pre id="terminal-output" class="pd-terminal"></pre>
-  <button id="return-btn" type="button" class="btn btn-secondary pd-return-btn" style="display:none;">Return to main screen</button>
+  <!-- Copy (always there, so the log can be copied mid-flash too) + Return (once finished) -->
+  <div class="pd-terminal-buttons">
+    <button id="copy-terminal-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
+    <button id="return-btn" type="button" class="btn btn-secondary pd-return-btn" style="display:none;">Return to main screen</button>
+  </div>
 </div>
 
 <!-- Inspect result modal -->
@@ -231,6 +235,6 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.6.0"></script>
+<script src="js/app.js?v=0.7.1"></script>
 </body>
 </html>

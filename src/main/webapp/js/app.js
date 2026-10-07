@@ -443,25 +443,12 @@ $(function(){
 	// that ALSO fails (common and silent on mobile browsers), fall back one more level to a
 	// prompt() the operator can manually select-all + copy from, rather than lying that it worked.
 	$('#copy-command-response-btn').on('click', function(){
-		var text = $('#send-command-body').text();
-		var btn = $(this);
-		function flashCopied(){
-			var original = btn.text();
-			btn.text('Copied!');
-			setTimeout(function(){ btn.text(original); }, 1200);
-		}
-		function fallback(){
-			if(!copyViaTextarea(text)){
-				window.prompt('Copy failed automatically - select all and copy manually:', text);
-			}else{
-				flashCopied();
-			}
-		}
-		if(navigator.clipboard && window.isSecureContext){
-			navigator.clipboard.writeText(text).then(flashCopied, fallback);
-		}else{
-			fallback();
-		}
+		copyTextToClipboard($('#send-command-body').text(), $(this));
+	});
+
+	// Same for the flash terminal (black screen) - the full esptool/deploy log.
+	$('#copy-terminal-btn').on('click', function(){
+		copyTextToClipboard($('#terminal-output').text(), $(this));
 	});
 
 	$(document).on('click', '.pd-tile', function(){
@@ -674,29 +661,85 @@ function showCompletionBanner(status){
 	$('<div id="terminal-status-line" class="pd-terminal-status-line ' + cls + '">' + text + '</div>').insertBefore('#terminal-output');
 }
 
+// Copy text to the clipboard, so an operator can paste it into email/Slack. navigator.clipboard
+// needs a secure context, and this app is served over plain HTTP, so fall back to a
+// hidden-textarea + execCommand('copy') - and if that ALSO fails (common and silent on mobile
+// browsers), fall back one more level to a prompt() the operator can manually select-all + copy
+// from, rather than lying that it worked. btn shows "Copied!" briefly on success.
+function copyTextToClipboard(text, btn){
+	function flashCopied(){
+		var original = btn.text();
+		btn.text('Copied!');
+		setTimeout(function(){ btn.text(original); }, 1200);
+	}
+	function fallback(){
+		if(!copyViaTextarea(text)){
+			window.prompt('Copy failed automatically - select all and copy manually:', text);
+		}else{
+			flashCopied();
+		}
+	}
+	if(navigator.clipboard && window.isSecureContext){
+		navigator.clipboard.writeText(text).then(flashCopied, fallback);
+	}else{
+		fallback();
+	}
+}
+
+// Epoch seconds from the device (Commissioned, Current Time) as a date/time in the devices' zone.
+function formatDeviceEpoch(value){
+	var n = parseInt(value);
+	if(!(n > 1000000000)) return value;
+	return new Date(n * 1000).toLocaleString('en-AU', {
+		timeZone: piTimeZone, day: '2-digit', month: '2-digit', year: 'numeric',
+		hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+	}).replace(',', '');
+}
+
 function renderInspect(data){
+	// Third element = already-escaped HTML (used instead of the plain value).
 	var rows = [
 		['Name', data.name],
 		['Device Name', data.deviceName],
 		['Short Name', data.deviceShortName],
 		['Serial Number', data.serialNumber],
-		['Firmware', data.firmware],
+		['Firmware', data.firmware, firmwareInspectHtml(data)],
+		['Running Build', '', data.runningBuild ? escapeHtml(formatBuildStamp(data.runningBuild)) : '<span class="text-muted">unknown (older firmware)</span>'],
 		['Power Source', data.powerSource],
 		['Battery', data.battery],
 		['PCBs', data.pcbs],
-		['Commissioned', data.commissiondate],
+		['Commissioned', formatDeviceEpoch(data.commissiondate)],
 		['SSID', data.ssid],
 		['Soft AP SSID', data.softApSsid],
 		['Host Name', data.hostName],
 		['Station Mode', data.stationMode],
-		['Current Time', data.currenttime]
+		['Current Time', formatDeviceEpoch(data.currenttime)]
 	];
 	var html = '<table class="table table-sm">';
 	$.each(rows, function(i, row){
-		html += '<tr><th>' + escapeHtml(row[0]) + '</th><td>' + escapeHtml(row[1]) + '</td></tr>';
+		html += '<tr><th>' + escapeHtml(row[0]) + '</th><td>' + (row.length > 2 ? row[2] : escapeHtml(row[1])) + '</td></tr>';
 	});
 	html += '</table>';
 	$('#inspect-body').html(html);
+}
+
+// The device saves the running build stamp along with the firmware label (SetProductDefinition),
+// so a label left over from an earlier flash shows up here instead of passing as current.
+function firmwareInspectHtml(data){
+	var label = escapeHtml(data.firmware || '');
+	if(!data.runningBuild) return label;
+	if(data.labelBuild && data.labelBuild === data.runningBuild){
+		return label + ' <span class="pd-fw-current">&#10003; current</span>';
+	}
+	return '<span class="pd-fw-stale">' + (label || 'no label') + ' &ndash; not current</span>' +
+		'<div class="pd-fw-stale-note">Flashed without updating the label. Deploy again to fix it.</div>';
+}
+
+// YYMMDDhh -> "26100714 (07/10/26 14:00)"
+function formatBuildStamp(stamp){
+	var s = String(stamp);
+	if(!/^\d{8}$/.test(s)) return s;
+	return s + ' (' + s.substr(4, 2) + '/' + s.substr(2, 2) + '/' + s.substr(0, 2) + ' ' + s.substr(6, 2) + ':00)';
 }
 
 // Shared by "Send Command" and "Calibrate CSW" - see SendCommandProcessingHandler.
