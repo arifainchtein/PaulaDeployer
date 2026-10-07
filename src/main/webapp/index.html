@@ -10,12 +10,20 @@
 <body>
 
 <div id="header" class="pd-header">
-  <div id="header-ips" class="pd-header-ips">Loading...</div>
+  <div class="pd-header-left">
+    <div id="header-ips" class="pd-header-ips">Loading...</div>
+    <!-- Pi clock, shown in the devices' zone (Constants.DEVICE_TIME_ZONE) - what "Set Time" will send -->
+    <div class="pd-header-time-row">
+      <span id="header-time" class="pd-header-time"></span>
+      <button id="internet-time-btn" type="button" class="pd-internet-time-btn">Internet Time</button>
+    </div>
+  </div>
   <button id="info-btn" type="button" class="pd-info-btn">i</button>
 </div>
 
 <div id="main-screen" class="pd-screen">
   <div class="pd-toolbar">
+    <button id="set-time-btn" type="button" class="btn btn-primary pd-toolbar-btn">Set Time</button>
     <button id="inspect-btn" type="button" class="btn btn-info pd-toolbar-btn">Inspect</button>
     <button id="send-command-btn" type="button" class="btn btn-info pd-toolbar-btn">Send Command</button>
     <button id="calibrate-csw-btn" type="button" class="btn btn-warning pd-toolbar-btn">Calibrate CSW</button>

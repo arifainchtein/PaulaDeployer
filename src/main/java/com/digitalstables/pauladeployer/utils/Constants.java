@@ -13,7 +13,7 @@ public class Constants {
 
 	// Shown in the page header - bump when deploying a meaningfully different build so it's
 	// obvious at a glance which version is running on a given Paula.
-	public static final String VERSION = "0.1.0 (2026-09-05)";
+	public static final String VERSION = "0.2.0 (2026-10-07)";
 
 	// Confirmed gotcha 2026-09-05: this used to be System.getProperty("user.home") + "/paulauploader" -
 	// worked fine while Tomcat ran as the "pi" user, but broke the moment Tomcat was started as
@@ -29,5 +29,14 @@ public class Constants {
 	// reachable on plain port 80 (its own Tomcat, no :8080 needed - see FactorySyncClient's own
 	// "http://factoryserver.local" default in PaulaUploader for the equivalent convention there).
 	public static final String FACTORY_BASE_URL = "http://192.168.1.138";
+
+	// The devices' RTCs hold local wall-clock time with daylight saving (same as Annabelle), so the
+	// header clock and "Set Time" always use this zone - not the Pi's own OS timezone, which
+	// provision-pi.sh never sets (Paula3 was on Europe/London, confirmed 2026-10-07).
+	public static final String DEVICE_TIME_ZONE = "Australia/Melbourne";
+
+	// Fallback for "Internet Time" when NTP doesn't sync in time - the Date header of a plain HTTP
+	// request (1 s resolution, works where UDP 123 is blocked).
+	public static final String HTTP_TIME_URL = "http://www.google.com";
 
 }

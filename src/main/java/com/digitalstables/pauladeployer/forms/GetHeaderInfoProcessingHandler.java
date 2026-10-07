@@ -54,6 +54,11 @@ public class GetHeaderInfoProcessingHandler extends ProcessingFormHandler{
 			JSONObject data = new JSONObject();
 			data.put("interfaces", interfaces);
 			data.put("version", Constants.VERSION);
+			// Pi clock for the header: the page keeps it ticking from this, shown in the devices' zone.
+			data.put("piTimeMillis", System.currentTimeMillis());
+			data.put("timeZone", Constants.DEVICE_TIME_ZONE);
+			Boolean ntpSynced = Utils.isNtpSynchronized();
+			if(ntpSynced != null) data.put("ntpSynchronized", ntpSynced.booleanValue());
 			toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 		}catch(Exception e){
 			logger.warn(Utils.getStringException(e));

@@ -23,6 +23,20 @@ html, body {
   z-index: 10;
 }
 
+.pd-header-left { min-width: 0; }
+.pd-header-time-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.pd-header-time { font-variant-numeric: tabular-nums; }
+.pd-header-time.pd-time-unsynced { color: #ffc107; }
+.pd-internet-time-btn {
+  border: 1px solid #6c757d;
+  background: transparent;
+  color: #9ec5fe;
+  border-radius: 4px;
+  font-size: 12px;
+  padding: 1px 8px;
+}
+.pd-internet-time-btn:disabled { opacity: 0.6; }
+
 .pd-header-ips { line-height: 1.4; }
 .pd-header-ips .pd-ip-line { display: block; }
 .pd-header-ips .pd-ip-iface { color: #9ec5fe; margin-right: 6px; }
