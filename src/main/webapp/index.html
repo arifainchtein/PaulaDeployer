@@ -6,24 +6,24 @@
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.3.0">
+<link rel="stylesheet" href="css/style.css?v=0.5.0">
 </head>
 <body>
 
 <div id="header" class="pd-header">
-  <div id="header-ips" class="pd-header-ips">Loading...</div>
+  <img src="assets/images/paula-logo.svg" alt="Paula" class="pd-header-logo">
   <!-- Second column: the Pi's clock in the devices' zone (Constants.DEVICE_TIME_ZONE), and below it
        a button that sets the Pi's clock from the internet. -->
   <div class="pd-header-clock">
     <div id="header-time" class="pd-header-time">&nbsp;</div>
-    <button id="internet-time-btn" type="button" class="btn btn-info btn-sm pd-header-time-btn">Set Time</button>
+    <button id="internet-time-btn" type="button" class="btn btn-info btn-sm pd-header-time-btn">Set Pi Time</button>
   </div>
   <button id="info-btn" type="button" class="pd-info-btn">i</button>
 </div>
 
 <div id="main-screen" class="pd-screen">
   <div class="pd-toolbar">
-    <button id="set-time-btn" type="button" class="btn btn-info pd-toolbar-btn">Set Time</button>
+    <button id="set-time-btn" type="button" class="btn btn-info pd-toolbar-btn">Set Device Time</button>
     <button id="inspect-btn" type="button" class="btn btn-info pd-toolbar-btn">Inspect</button>
     <button id="send-command-btn" type="button" class="btn btn-info pd-toolbar-btn">Send Command</button>
     <button id="calibrate-csw-btn" type="button" class="btn btn-warning pd-toolbar-btn">Calibrate CSW</button>
@@ -54,7 +54,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div id="info-body" class="pd-empty-message">Loading...</div>
+        <!-- wlan0/wlan1 IPs (moved here from the header, 2026-10-07) and the app version -->
+        <div id="info-ips" class="pd-info-ips">Loading...</div>
+        <div id="info-body" class="pd-info-version">Loading...</div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -229,6 +231,6 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.3.0"></script>
+<script src="js/app.js?v=0.5.0"></script>
 </body>
 </html>

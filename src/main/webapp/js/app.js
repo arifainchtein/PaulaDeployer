@@ -1,5 +1,6 @@
 var pollTimer = null;
 var lastHeaderVersion = '';
+var lastHeaderIpsHtml = '';
 // Header clock: Pi time minus phone time, so the clock ticks locally between header refreshes
 // and shows the PI's time (what Set Time sends), not the phone's.
 var piClockOffsetMillis = null, piTimeZone = 'Australia/Melbourne', piNtpSynchronized = null;
@@ -19,7 +20,7 @@ $(function(){
 			data: {formName: "SyncInternetTime"},
 			success: function(raw){
 				var result = JSON.parse(raw);
-				btn.prop('disabled', false).text('Set Time');
+				btn.prop('disabled', false).text('Set Pi Time');
 				if(result[STATUS_KEY] === STATUS_SUCCESS){
 					var data = JSON.parse(result[DATA_KEY]);
 					updatePiClock(data);
@@ -29,7 +30,7 @@ $(function(){
 				}
 			},
 			error: function(){
-				btn.prop('disabled', false).text('Set Time');
+				btn.prop('disabled', false).text('Set Pi Time');
 				alert('Request failed.');
 			}
 		});
@@ -39,7 +40,7 @@ $(function(){
 	$('#set-time-btn').on('click', function(){
 		var question = 'Set the device clock to ' + formatPiTime() + '?';
 		if(piNtpSynchronized === false){
-			question = 'The Pi clock has NOT been synced from the internet - it may be wrong. Press Set Time in the black header first if you can.\n\n' + question;
+			question = 'The Pi clock has NOT been synced from the internet - it may be wrong. Press Set Pi Time first if you can.\n\n' + question;
 		}
 		if(!confirm(question)) return;
 		var btn = $(this);
@@ -50,7 +51,7 @@ $(function(){
 			data: {formName: "SetDeviceTime"},
 			success: function(raw){
 				var result = JSON.parse(raw);
-				btn.prop('disabled', false).text('Set Time');
+				btn.prop('disabled', false).text('Set Device Time');
 				if(result[STATUS_KEY] === STATUS_SUCCESS){
 					var data = JSON.parse(result[DATA_KEY]);
 					alert((data.ok ? 'Device time set: ' : 'Sent, but the device did not answer Ok-SetTime: ') + data.command + '\n\n' + data.response);
@@ -59,7 +60,7 @@ $(function(){
 				}
 			},
 			error: function(){
-				btn.prop('disabled', false).text('Set Time');
+				btn.prop('disabled', false).text('Set Device Time');
 				alert('Request failed.');
 			}
 		});
@@ -67,6 +68,7 @@ $(function(){
 
 	// Version/date moved behind an (i) button instead of always showing in the header (2026-09-05).
 	$('#info-btn').on('click', function(){
+		$('#info-ips').html(lastHeaderIpsHtml || 'No wlan interfaces found');
 		$('#info-body').text(lastHeaderVersion || 'Unknown');
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('info-modal')).show();
 	});
@@ -522,7 +524,7 @@ function loadHeaderInfo(){
 				html += '<span class="pd-ip-line"><span class="pd-ip-iface">' + escapeHtml(iface.interface) + '</span>' + escapeHtml(iface.ip) + '</span>';
 				if(iface.interface === 'wlan1') hasWlan1 = true;
 			});
-			$('#header-ips').html(html);
+			lastHeaderIpsHtml = html;  // shown in the (i) popup
 			updatePiClock(data);
 			lastHeaderVersion = 'Version ' + data.version;
 			// Confirm only makes sense once this Paula can actually reach the factory NUC - wlan1
@@ -543,15 +545,16 @@ function updatePiClock(data){
 
 function formatPiTime(){
 	if(piClockOffsetMillis === null) return '';
+	// e.g. "07/10/26 12:58:31 AEDT" - short enough to keep the header on one line on a 360px phone
 	return new Date(Date.now() + piClockOffsetMillis).toLocaleString('en-AU', {
-		timeZone: piTimeZone, day: '2-digit', month: '2-digit', year: 'numeric',
+		timeZone: piTimeZone, day: '2-digit', month: '2-digit', year: '2-digit',
 		hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short'
-	});
+	}).replace(',', '');
 }
 
 function renderHeaderTime(){
 	if(piClockOffsetMillis === null) return;
-	var label = 'Pi ' + formatPiTime();
+	var label = formatPiTime();
 	if(piNtpSynchronized === false) label += ' (not synced)';
 	$('#header-time').text(label).toggleClass('pd-time-unsynced', piNtpSynchronized === false);
 }
