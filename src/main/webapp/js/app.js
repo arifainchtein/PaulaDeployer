@@ -66,6 +66,38 @@ $(function(){
 		});
 	});
 
+	// "Send Identity Packet" - resends the device's own product definition unchanged, which makes
+	// it send a DeviceIdentity packet over LoRa after its next VitalSigns (see
+	// SendIdentityPacketProcessingHandler).
+	$('#send-identity-btn').on('click', function(){
+		var btn = $(this);
+		btn.prop('disabled', true).text('Sending...');
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "SendIdentityPacket"},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				btn.prop('disabled', false).text('Send Identity Packet');
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					var data = JSON.parse(result[DATA_KEY]);
+					if(data.ok){
+						alert('Identity packet queued for ' + (data.name || 'the device') + ' (' + (data.firmware || 'no firmware label') + ').\n\n'
+							+ 'The device sends it right after its next Vital Signs - within about 10 minutes while it stays awake.');
+					}else{
+						alert('The device did not answer Ok-SetProductDefinition:\n\n' + data.response);
+					}
+				}else{
+					alert('Could not send: ' + result[DATA_KEY]);
+				}
+			},
+			error: function(){
+				btn.prop('disabled', false).text('Send Identity Packet');
+				alert('Request failed.');
+			}
+		});
+	});
+
 	// Version/date moved behind an (i) button instead of always showing in the header (2026-09-05).
 	$('#info-btn').on('click', function(){
 		$('#info-ips').html(lastHeaderIpsHtml || 'No wlan interfaces found');

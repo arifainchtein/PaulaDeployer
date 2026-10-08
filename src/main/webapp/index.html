@@ -6,7 +6,7 @@
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.7.1">
+<link rel="stylesheet" href="css/style.css?v=0.7.2">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
     <button id="test-i2c-temp-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test I2C Temp</button>
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
+    <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -235,6 +236,6 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.7.1"></script>
+<script src="js/app.js?v=0.7.2"></script>
 </body>
 </html>
