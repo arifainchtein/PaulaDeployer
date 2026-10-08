@@ -18,7 +18,8 @@ import com.digitalstables.pauladeployer.utils.Utils;
 // DeviceIdentityRecord over LoRa again, so Annabelle/the Teleonome pick up its product definition
 // and running build without waiting for the daily resend.
 //
-// The firmware has no dedicated command for this - but SetProductDefinition marks an identity
+// Daffodil v54+ has a SendDeviceIdentity command that transmits it immediately - tried first.
+// Older firmware has no dedicated command - but SetProductDefinition marks an identity
 // packet as due (Esp32SecretManager::saveProductDefinition sets NVS identPend). So read the
 // product definition back and resend it unchanged, the same way StartDeployProcessingHandler's
 // updateFirmwareLabelOnDevice does minus the label change. The device then sends the identity
@@ -37,6 +38,20 @@ public class SendIdentityPacketProcessingHandler extends ProcessingFormHandler{
 		JSONObject toReturn;
 		try{
 			FirmwareFlasher flasher = new FirmwareFlasher();
+			// Daffodil v54+: SendDeviceIdentity transmits immediately. Older firmware answers
+			// "Failure-Command Not Found-..." - fall back to queueing it below.
+			String sendResult = flasher.sendCommandToTarget("SendDeviceIdentity", true);
+			if(sendResult == null){
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No target device responded - is it plugged in?");
+			}
+			if(!sendResult.contains("Command Not Found")){
+				JSONObject data = new JSONObject();
+				data.put("immediate", true);
+				data.put("ok", sendResult.contains("Ok-SendDeviceIdentity"));
+				data.put("response", sendResult);
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
+			}
+
 			String getResult = flasher.sendCommandToTarget("GetProductDefinition", true);
 			if(getResult == null){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No target device responded - is it plugged in?");
@@ -57,6 +72,7 @@ public class SendIdentityPacketProcessingHandler extends ProcessingFormHandler{
 			String setResult = flasher.sendCommandToTarget(setCommand, true);
 
 			JSONObject data = new JSONObject();
+			data.put("immediate", false);
 			data.put("ok", setResult != null && setResult.contains("Ok-SetProductDefinition"));
 			data.put("name", name);
 			data.put("firmware", firmware);

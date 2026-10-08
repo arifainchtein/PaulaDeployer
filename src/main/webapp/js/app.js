@@ -81,8 +81,11 @@ $(function(){
 				btn.prop('disabled', false).text('Send Identity Packet');
 				if(result[STATUS_KEY] === STATUS_SUCCESS){
 					var data = JSON.parse(result[DATA_KEY]);
-					if(data.ok){
-						alert('Identity packet queued for ' + (data.name || 'the device') + ' (' + (data.firmware || 'no firmware label') + ').\n\n'
+					if(data.immediate){
+						alert(data.ok ? 'Identity packet sent now over LoRa.\n\n' + data.response
+							: 'The device could not send it:\n\n' + data.response);
+					}else if(data.ok){
+						alert('This firmware cannot send it immediately (needs Daffodil v54+), so it was queued for ' + (data.name || 'the device') + ' (' + (data.firmware || 'no firmware label') + ').\n\n'
 							+ 'The device sends it right after its next Vital Signs - within about 10 minutes while it stays awake.');
 					}else{
 						alert('The device did not answer Ok-SetProductDefinition:\n\n' + data.response);
