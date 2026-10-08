@@ -130,6 +130,55 @@ $(function(){
 		});
 	});
 
+	// Restart Tomcat - needed after every WAR redeploy (jSerialComm can only load once per JVM, so the
+	// serial port is dead until the process restarts). The server schedules the restart 2s out, then
+	// we poll until it answers again and reload the page.
+	$('#restart-tomcat-btn').on('click', function(){
+		if(!confirm('Restart Tomcat now? PaulaDeployer will be unavailable for about 30 seconds.')) return;
+		var btn = $(this);
+		btn.prop('disabled', true);
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "RestartTomcat"},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] === STATUS_SUCCESS){
+					$('#tile-grid').html('<div class="pd-empty-message">Restarting Tomcat - the page will reload when it is back...</div>');
+					waitForTomcatThenReload(Date.now());
+				}else{
+					btn.prop('disabled', false);
+					alert('Could not restart Tomcat: ' + result[DATA_KEY]);
+				}
+			},
+			error: function(){
+				btn.prop('disabled', false);
+				alert('Request failed - Tomcat may already be restarting.');
+			}
+		});
+	});
+
+	function waitForTomcatThenReload(startedAt){
+		// give it time to actually go down before the first probe, so we don't hit the old process
+		setTimeout(function probe(){
+			$.ajax({
+				type: "POST",
+				url: "PaulaDeployerServlet",
+				data: {formName: "GetHeaderInfo"},
+				timeout: 4000,
+				success: function(){ location.reload(); },
+				error: function(){
+					if(Date.now() - startedAt > 180000){
+						alert('Tomcat has not come back after 3 minutes - check the Pi.');
+						$('#restart-tomcat-btn').prop('disabled', false);
+						return;
+					}
+					setTimeout(probe, 3000);
+				}
+			});
+		}, 8000);
+	}
+
 	// Only shown once wlan1 (the factory-network client) has a real IP - see loadHeaderInfo.
 	$('#confirm-upgrades-btn').on('click', function(){
 		var btn = $(this);

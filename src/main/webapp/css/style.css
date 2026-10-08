@@ -199,6 +199,18 @@ html, body {
   padding: 0;
 }
 
+.pd-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pd-restart-btn {
+  background: #e0a800;
+  color: #212529;
+  font-size: 24px;
+}
+
 .pd-footer-right {
   display: flex;
   align-items: center;

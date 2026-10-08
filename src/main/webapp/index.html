@@ -6,7 +6,7 @@
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.7.4">
+<link rel="stylesheet" href="css/style.css?v=0.7.5">
 </head>
 <body>
 
@@ -38,7 +38,10 @@
     <div class="pd-empty-message">Loading deploy queue...</div>
   </div>
   <div id="main-footer" class="pd-main-footer">
-    <button id="shutdown-btn" type="button" class="pd-shutdown-btn" title="Shut down this Pi">&#9211;</button>
+    <div class="pd-footer-left">
+      <button id="shutdown-btn" type="button" class="pd-shutdown-btn" title="Shut down this Pi">&#9211;</button>
+      <button id="restart-tomcat-btn" type="button" class="pd-shutdown-btn pd-restart-btn" title="Restart Tomcat (PaulaDeployer)">&#8635;</button>
+    </div>
     <div class="pd-footer-right">
       <button id="remove-confirmed-btn" type="button" class="btn btn-outline-danger pd-remove-btn" style="display:none;">Remove</button>
       <button id="confirm-upgrades-btn" type="button" class="btn btn-success pd-confirm-btn" style="display:none;">Confirm</button>
@@ -236,6 +239,6 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.7.4"></script>
+<script src="js/app.js?v=0.7.5"></script>
 </body>
 </html>
