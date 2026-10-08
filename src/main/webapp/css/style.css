@@ -275,3 +275,4 @@ html, body {
   .pd-header-clock { margin-left: 8px; }
   .pd-info-btn { margin-left: 6px; }
 }
+.pd-fw-link { color: #2a670e; font-weight: 600; text-decoration: underline; }

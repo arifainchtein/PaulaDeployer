@@ -13,7 +13,7 @@ public class Constants {
 
 	// Shown in the page header - bump when deploying a meaningfully different build so it's
 	// obvious at a glance which version is running on a given Paula.
-	public static final String VERSION = "0.7.3 (2026-10-08)";
+	public static final String VERSION = "0.7.4 (2026-10-08)";
 
 	// Confirmed gotcha 2026-09-05: this used to be System.getProperty("user.home") + "/paulauploader" -
 	// worked fine while Tomcat ran as the "pi" user, but broke the moment Tomcat was started as

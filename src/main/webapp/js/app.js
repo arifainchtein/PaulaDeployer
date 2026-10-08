@@ -760,11 +760,21 @@ function renderInspect(data){
 
 // The device saves the running build stamp along with the firmware label (SetProductDefinition),
 // so a label left over from an earlier flash shows up here instead of passing as current.
+// "Daffodil v55" -> the source on GitHub. DigitalStablesWatchDir tags every exported release with the
+// bare version number on github.com/arifainchtein/<repo>, so v55 is /tree/55. Only used when the label
+// is current - a stale label names code that isn't what's running. Opens in a new tab.
+function firmwareSourceLink(firmware, labelHtml){
+	var m = /^([A-Za-z0-9_.-]+) v(\d+)$/.exec((firmware || '').trim());
+	if(!m) return labelHtml;
+	var url = 'https://github.com/arifainchtein/' + encodeURIComponent(m[1]) + '/tree/' + m[2];
+	return '<a class="pd-fw-link" href="' + url + '" target="_blank" rel="noopener">' + labelHtml + '</a>';
+}
+
 function firmwareInspectHtml(data){
 	var label = escapeHtml(data.firmware || '');
 	if(!data.runningBuild) return label;
 	if(data.labelBuild && data.labelBuild === data.runningBuild){
-		return label + ' <span class="pd-fw-current">&#10003; current</span>';
+		return firmwareSourceLink(data.firmware, label) + ' <span class="pd-fw-current">&#10003; current</span>';
 	}
 	return '<span class="pd-fw-stale">' + (label || 'no label') + ' &ndash; not current</span>' +
 		'<div class="pd-fw-stale-note">Flashed without updating the label. Deploy again to fix it.</div>';
