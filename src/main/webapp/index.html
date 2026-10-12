@@ -33,6 +33,7 @@
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
     <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
+    <button id="stream-chat-btn" type="button" class="btn btn-success pd-toolbar-btn">Stream 2 Chat</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -91,6 +92,35 @@
         <div id="inspect-body"><div class="pd-empty-message">Talking to the device...</div></div>
       </div>
       <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stream 2 Chat (2026-10-12): pick a FactoryChat participant, Start sends the start command
+     (debug#1) to the device and forwards everything it prints to that chat until Stop. -->
+<div class="modal fade" id="stream-chat-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Stream 2 Chat</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="pd-reminder">Needs the device's USB jumper on the <strong>USB</strong> position. Move it back to the watchdog header when you're done.</div>
+        <label for="stream-chat-target" class="form-label" style="margin-top:8px;">Send to</label>
+        <div class="input-group">
+          <select id="stream-chat-target" class="form-select"><option>Loading chats...</option></select>
+          <button id="stream-chat-refresh-btn" type="button" class="btn btn-outline-secondary" title="Refresh the list">&#8635;</button>
+        </div>
+        <label for="stream-chat-command" class="form-label" style="margin-top:8px;">Command sent first</label>
+        <input type="text" id="stream-chat-command" class="form-control" value="debug#1">
+        <div id="stream-chat-status" style="margin:10px 0 6px 0;font-size:14px;"></div>
+        <div id="stream-chat-body" class="pd-command-response" style="max-height:45vh;overflow-y:auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="stream-chat-toggle-btn" type="button" class="btn btn-success me-auto">Start</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>

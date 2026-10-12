@@ -30,6 +30,9 @@ public class FirmwareFlasher {
 	private static final String BOOT_APP0_PATH = "/home/pi/.arduino15/packages/esp32/hardware/esp32/1.0.6/tools/partitions/boot_app0.bin";
 	private static final String BOOTLOADER_PATH = "/home/pi/.arduino15/packages/esp32/hardware/esp32/1.0.6/tools/sdk/bin/bootloader_dio_80m.bin";
 
+	// upload.sh prints this when a write fails and it is about to retry at a lower baud rate.
+	private static final String RETRY_MARKER = "Flash failed at";
+
 	private static final int DATA_RATE = 115200;
 	private static final int READ_TIMEOUT_MILLISECONDS = 500;
 	private static final int MAX_WAIT_MILLISECONDS = 30000;
@@ -69,6 +72,10 @@ public class FirmwareFlasher {
 	}
 
 	public boolean flash(String binPath, String partitionsPath, String workDir, boolean excludeWallyPort, Consumer<String> onLine) throws IOException, InterruptedException {
+		if (com.digitalstables.pauladeployer.chat.SerialChatStreamer.get().isRunning()) {
+			onLine.accept("Stream 2 Chat is using the device's port - stop it first.");
+			return false;
+		}
 		logger.info("flash() starting - binPath=" + binPath + " partitionsPath=" + partitionsPath + " workDir=" + workDir);
 		SerialPort targetPort = findTargetPort(excludeWallyPort);
 		if (targetPort == null) {
@@ -89,16 +96,29 @@ public class FirmwareFlasher {
 		// esptool.py entirely missing from disk, and the post-flash Ping only succeeded because the
 		// device was never actually touched and was still running its previous firmware.
 		command.append("set -e" + System.lineSeparator());
-		command.append("python \"" + ESPTOOL_PATH + "\" ");
-		command.append("--chip esp32 --port \"" + portName + "\" --baud 921600 --before default_reset ");
+		// Confirmed 2026-10-12: a Daffodil v57 deploy wrote the app fine, then died on the first
+		// block of the www image with "Failed to write compressed data to flash after seq 0 (result
+		// was C100)" - 0xC1 is the stub's bad-data-checksum status, i.e. bytes corrupted on the USB
+		// serial link at 921600. Retry the whole write at slower rates instead of failing the
+		// deploy. esptool inside the `if` doesn't trip `set -e`; the loop's `exit 1` still does
+		// when every rate fails, so the touch below stays the only success path.
+		command.append("for BAUD in 921600 460800 115200; do" + System.lineSeparator());
+		command.append("  if python \"" + ESPTOOL_PATH + "\" ");
+		command.append("--chip esp32 --port \"" + portName + "\" --baud $BAUD --before default_reset ");
 		command.append("--after hard_reset write_flash -z --flash_mode dio --flash_freq 80m ");
 		command.append("--flash_size detect 0xe000 ");
 		command.append("\"" + BOOT_APP0_PATH + "\" ");
 		command.append("0x1000 \"" + BOOTLOADER_PATH + "\" ");
 		command.append("0x10000 \"" + binPath + "\" ");
 		command.append("0x8000 \"" + partitionsPath + "\" ");
-		command.append(WwwImage.writeFlashArgs(new File(partitionsPath)) + System.lineSeparator());
-		command.append("touch firmwareUploadComplete");
+		command.append(WwwImage.writeFlashArgs(new File(partitionsPath)) + "; then" + System.lineSeparator());
+		command.append("    touch firmwareUploadComplete" + System.lineSeparator());
+		command.append("    exit 0" + System.lineSeparator());
+		command.append("  fi" + System.lineSeparator());
+		command.append("  echo \"" + RETRY_MARKER + " $BAUD baud - retrying slower\"" + System.lineSeparator());
+		command.append("  sleep 2" + System.lineSeparator());
+		command.append("done" + System.lineSeparator());
+		command.append("exit 1");
 
 		File uploadFile = new File(workDir, "upload.sh");
 		FileUtils.writeStringToFile(uploadFile, command.toString());
@@ -125,7 +145,9 @@ public class FirmwareFlasher {
 		String line;
 		while ((line = reader.readLine()) != null) {
 			onLine.accept(line);
-			if (line.startsWith("Serial port")) {
+			if (line.startsWith(RETRY_MARKER)) {
+				onLine.accept("*** Get ready to press PROGRAM again ***");
+			} else if (line.startsWith("Serial port")) {
 				onLine.accept("*** PRESS PROGRAM NOW ***");
 			} else if (line.startsWith("Hard resetting via RTS")) {
 				onLine.accept("*** PRESS RESET NOW ***");
@@ -159,6 +181,10 @@ public class FirmwareFlasher {
 	// getTargetIpAddress use in the original isn't enough here.
 	public String sendCommandToTarget(String command, boolean excludeWallyPort) {
 		logger.debug("sendCommandToTarget: " + command);
+		// Stream 2 Chat holds the port open - opening it again here would fail or steal its output.
+		if (com.digitalstables.pauladeployer.chat.SerialChatStreamer.get().isRunning()) {
+			return "Failure - Stream 2 Chat is using the device's port. Stop it first.";
+		}
 		SerialPort port = findTargetPort(excludeWallyPort);
 		if (port == null){
 			logger.warn("sendCommandToTarget() - no target serial port found");

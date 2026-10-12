@@ -261,6 +261,44 @@ $(function(){
 		});
 	});
 
+	// "Stream 2 Chat" - see StreamToChatProcessingHandler. The stream runs on the Pi, so closing
+	// the window (or the phone locking) doesn't stop it; reopening shows its current state.
+	$('#stream-chat-btn').on('click', function(){
+		loadStreamChatParticipants();
+		refreshStreamChat();
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('stream-chat-modal')).show();
+	});
+	$('#stream-chat-refresh-btn').on('click', loadStreamChatParticipants);
+	$('#stream-chat-toggle-btn').on('click', function(){
+		var action = streamChatRunning ? 'stop' : 'start';
+		var params = {formName: "StreamToChat", action: action};
+		if(action === 'start'){
+			params.target = $('#stream-chat-target').val();
+			params.command = $('#stream-chat-command').val();
+			if(!params.target){
+				alert('Choose a chat to send to.');
+				return;
+			}
+		}
+		$('#stream-chat-toggle-btn').prop('disabled', true);
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet", data: params,
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
+				refreshStreamChat();
+			},
+			error: function(){ alert('Request failed.'); },
+			complete: function(){ $('#stream-chat-toggle-btn').prop('disabled', false); }
+		});
+	});
+	$('#stream-chat-modal').on('hidden.bs.modal', function(){
+		if(streamChatTimer){ clearInterval(streamChatTimer); streamChatTimer = null; }
+	});
+	$('#stream-chat-modal').on('shown.bs.modal', function(){
+		if(!streamChatTimer) streamChatTimer = setInterval(refreshStreamChat, 1500);
+	});
+
 	// "Send Command" - operator types anything, editable, nothing pre-sent on open. The shortcut
 	// row (common commands) only makes sense here, not for Calibrate CSW's locked-in command.
 	$('#send-command-btn').on('click', function(){
@@ -837,6 +875,56 @@ function formatBuildStamp(stamp){
 }
 
 // Shared by "Send Command" and "Calibrate CSW" - see SendCommandProcessingHandler.
+var streamChatRunning = false;
+var streamChatTimer = null;
+
+function loadStreamChatParticipants(){
+	var $sel = $('#stream-chat-target');
+	var previous = $sel.val();
+	$sel.html('<option>Loading chats...</option>');
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "StreamToChat", action: "participants"},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){
+				$sel.html('<option value="">' + escapeHtml(result[DATA_KEY]) + '</option>');
+				return;
+			}
+			var data = JSON.parse(result[DATA_KEY]);
+			$sel.empty();
+			data.participants.forEach(function(name){
+				$sel.append($('<option>').val(name).text(name));
+			});
+			if(previous && data.participants.indexOf(previous) >= 0) $sel.val(previous);
+		},
+		error: function(){ $sel.html('<option value="">Cannot reach FactoryChat</option>'); }
+	});
+}
+
+function refreshStreamChat(){
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "StreamToChat", action: "status"},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS) return;
+			var s = JSON.parse(result[DATA_KEY]);
+			streamChatRunning = s.running;
+			$('#stream-chat-toggle-btn').text(s.running ? 'Stop' : 'Start')
+				.toggleClass('btn-success', !s.running).toggleClass('btn-danger', s.running);
+			$('#stream-chat-target, #stream-chat-command').prop('disabled', s.running);
+			var status = s.running
+				? 'Streaming to <strong>' + escapeHtml(s.target) + '</strong> from ' + escapeHtml(s.port) + ': ' + s.linesRead + ' lines, ' + s.messagesSent + ' messages'
+				: (s.linesRead > 0 ? 'Stopped after ' + s.linesRead + ' lines (' + s.messagesSent + ' messages to ' + escapeHtml(s.target) + ')' : 'Not streaming');
+			if(s.lastError) status += '<div class="text-danger">' + escapeHtml(s.lastError) + '</div>';
+			$('#stream-chat-status').html(status);
+			var $body = $('#stream-chat-body');
+			var atBottom = $body[0].scrollHeight - $body.scrollTop() - $body.outerHeight() < 30;
+			$body.text((s.lines || []).join('\n'));
+			if(atBottom) $body.scrollTop($body[0].scrollHeight);
+		}
+	});
+}
+
 function sendCommand(command){
 	$.ajax({
 		type: "POST",
