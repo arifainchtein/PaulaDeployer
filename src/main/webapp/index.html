@@ -6,7 +6,7 @@
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.7.5">
+<link rel="stylesheet" href="css/style.css?v=0.7.8">
 </head>
 <body>
 
@@ -27,6 +27,7 @@
     <button id="inspect-btn" type="button" class="btn btn-info pd-toolbar-btn">Inspect</button>
     <button id="send-command-btn" type="button" class="btn btn-info pd-toolbar-btn">Send Command</button>
     <button id="stream-chat-btn" type="button" class="btn btn-info pd-toolbar-btn">Stream 2 Chat</button>
+    <button id="nearby-btn" type="button" class="btn btn-info pd-toolbar-btn">Nearby Devices</button>
     <button id="calibrate-csw-btn" type="button" class="btn btn-warning pd-toolbar-btn">Calibrate CSW</button>
     <button id="test-flow-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Flow Sensor</button>
     <button id="test-ultrasonic-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Ultrasonic</button>
@@ -126,6 +127,27 @@
       </div>
       <div class="modal-footer">
         <button id="stream-chat-toggle-btn" type="button" class="btn btn-success me-auto">Start</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Nearby devices (2026-10-14): the Daffodils Paula hears over LoRa, with a WiFi on/off button -
+     the same command as Annabelle's web page (NearbyDevicesProcessingHandler). -->
+<div class="modal fade" id="nearby-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nearby Devices</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:13px;color:#6c757d;margin-bottom:8px;">Daffodils Paula has heard. A device appears when it next sends: within a minute when awake, up to its sleep time when asleep. "Turn WiFi on" keeps it awake with WiFi for 15 minutes; then connect the phone to the Daffodil's hotspot.</div>
+        <div id="nearby-status" style="font-size:14px;margin-bottom:6px;"></div>
+        <div id="nearby-list"></div>
+      </div>
+      <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
@@ -274,6 +296,6 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.7.5"></script>
+<script src="js/app.js?v=0.7.8"></script>
 </body>
 </html>

@@ -270,6 +270,31 @@ $(function(){
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('stream-chat-modal')).show();
 	});
 	$('#stream-chat-refresh-btn').on('click', loadStreamChatParticipants);
+
+	// "Nearby Devices" - see NearbyDevicesProcessingHandler. Polls every 5 s while open.
+	$('#nearby-btn').on('click', function(){
+		$('#nearby-status').text('Talking to Paula...');
+		loadNearbyDevices();
+		if(!nearbyTimer) nearbyTimer = setInterval(loadNearbyDevices, 5000);
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('nearby-modal')).show();
+	});
+	$('#nearby-modal').on('hidden.bs.modal', function(){
+		clearInterval(nearbyTimer);
+		nearbyTimer = null;
+	});
+	$('#nearby-list').on('click', '.nearby-wifi', function(){
+		var $b = $(this).prop('disabled', true);
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet",
+			data: {formName: "NearbyDevices", action: "wifi", serial: $b.data('serial'), state: $b.data('state')},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
+				loadNearbyDevices();
+			},
+			error: function(){ alert('Request failed.'); $b.prop('disabled', false); }
+		});
+	});
 	$('#stream-chat-toggle-btn').on('click', function(){
 		var action = streamChatRunning ? 'stop' : 'start';
 		var params = {formName: "StreamToChat", action: action};
@@ -1029,4 +1054,51 @@ function escapeHtml(s){
 	return String(s).replace(/[&<>"']/g, function(c){
 		return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
 	});
+}
+
+// ---------------------------------------------------------------- Nearby devices (2026-10-14)
+
+var nearbyTimer = null;
+var NEARBY_WIFI = {1: 'own hotspot', 2: 'router, no internet', 3: 'router + internet'};
+
+function nearbyAgo(sec){
+	if(sec < 60) return sec + ' s ago';
+	if(sec < 3600) return Math.floor(sec / 60) + ' min ago';
+	return Math.floor(sec / 3600) + ' h ' + Math.floor((sec % 3600) / 60) + ' min ago';
+}
+
+function loadNearbyDevices(){
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "list"},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){
+				$('#nearby-status').html('<span class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</span>');
+				return;
+			}
+			var devices = JSON.parse(result[DATA_KEY]).devices || [];
+			$('#nearby-status').text(devices.length ? '' : 'None heard yet - waiting for a device to send.');
+			$('#nearby-list').html(devices.map(nearbyDeviceHtml).join(''));
+		},
+		error: function(){ $('#nearby-status').html('<span class="text-danger">Request failed.</span>'); }
+	});
+}
+
+function nearbyDeviceHtml(d){
+	var on = d.wifi > 0, c = d.cmd, pending = c && c.state === 1;
+	var wifi = on ? '<span style="color:#2e7d32">&#10003; WiFi on</span> - ' + escapeHtml(NEARBY_WIFI[d.wifi] || ('status ' + d.wifi))
+		: '<span class="text-danger">&#10007; WiFi off</span>';
+	var note = '';
+	if(pending) note = '<div style="color:#ef6c00">Turning ' + (c.on ? 'on' : 'off') + '... sent ' + c.sends + 'x, ' + nearbyAgo(c.ageSec)
+		+ (d.sleep > 0 ? ' - asleep, answers when it wakes (every ' + d.sleep + ' s)' : '') + '</div>';
+	else if(c && c.state === 2) note = '<div class="text-muted">Turned ' + (c.on ? 'on' : 'off') + ' ' + nearbyAgo(c.ageSec) + '</div>';
+	else if(c && c.state === 3) note = '<div class="text-danger">Gave up after 15 min - device not heard</div>';
+	var btn = pending ? '<button type="button" class="btn btn-outline-secondary btn-sm" disabled>Waiting...</button>'
+		: '<button type="button" class="btn btn-outline-primary btn-sm nearby-wifi" data-serial="' + escapeHtml(d.serial) + '" data-state="' + (on ? 'off' : 'on') + '">'
+		  + (on ? 'Turn WiFi off' : 'Turn WiFi on') + '</button>';
+	return '<div style="border-bottom:1px solid #eee;padding:8px 0;font-size:14px;">'
+		+ '<div class="d-flex justify-content-between align-items-center" style="gap:8px;"><strong>' + escapeHtml(d.name || d.serial) + '</strong>' + btn + '</div>'
+		+ '<div>' + wifi + ' &middot; ' + Number(d.battery).toFixed(2) + ' V &middot; ' + (d.sleep > 0 ? 'asleep ' + d.sleep + ' s' : 'awake')
+		+ ' &middot; heard ' + nearbyAgo(d.ageSec) + ' (' + d.rssi + ' dBm)</div>' + note
+		+ '<div class="text-muted" style="font-family:monospace;font-size:12px;">' + escapeHtml(d.serial) + '</div></div>';
 }

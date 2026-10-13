@@ -34,6 +34,14 @@ public class PaulaSerialLink {
 	private SerialPort cachedWallyPort;
 
 	public static SerialPort findWallyPort() {
+		// Held open by PaulaRadio (Nearby devices): that is Paula - no probe, which would fail on
+		// the busy port and let the flasher take Paula for the target.
+		String held = PaulaRadio.get().heldPortName();
+		if (held != null) {
+			for (SerialPort port : SerialPort.getCommPorts()) {
+				if (port.getSystemPortName().equals(held)) return port;
+			}
+		}
 		List<SerialPort> candidates = new ArrayList<SerialPort>();
 		for (SerialPort port : SerialPort.getCommPorts()) {
 			if (port.getVendorID() == WALLY_VENDOR_ID && port.getProductID() == WALLY_PRODUCT_ID) {
@@ -52,7 +60,9 @@ public class PaulaSerialLink {
 
 	private static boolean probeForPaula(SerialPort port) {
 		String response = sendCommandOnPort(port, "GetSwitchState", PROBE_TIMEOUT_MILLISECONDS);
-		return response != null && response.contains("Left=") && response.contains("Right=");
+		// Paula.ino answers "Sleep=<n>" then "Ok-GetSwitchState" since its switch was removed - the
+		// old Left=/Right= check never matched again, so findWallyPort() always returned null.
+		return response != null && response.contains("Ok-GetSwitchState");
 	}
 
 	public String setStatusText(String text) {

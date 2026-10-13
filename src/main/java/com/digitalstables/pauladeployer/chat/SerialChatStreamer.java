@@ -290,7 +290,9 @@ public class SerialChatStreamer {
 			for (int i = 2; out.exists(); i++) out = new File(LOG_DIR, base + "_" + i + ".txt");
 			file = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(out), StandardCharsets.UTF_8));
 			synchronized (this) { fileName = out.getName(); }
-			writeFileLine("# Stream from " + deviceName + " on " + portName + ", started " + new Date()
+			SimpleDateFormat stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
+			stamp.setTimeZone(TimeZone.getTimeZone(Constants.DEVICE_TIME_ZONE));   // the Pi's own zone is not set (Europe/London on Paula3)
+			writeFileLine("# Stream from " + deviceName + " on " + portName + ", started " + stamp.format(new Date())
 					+ (startCommand.isEmpty() ? "" : ", start command " + startCommand));
 		} catch (IOException e) {
 			file = null;
