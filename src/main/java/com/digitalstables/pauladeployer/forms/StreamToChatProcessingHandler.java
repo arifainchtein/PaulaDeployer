@@ -23,6 +23,8 @@ import com.digitalstables.pauladeployer.utils.Utils;
 //   start         - target=<participant>, command=<sent to the device first, default debug#1>
 //   stop          - stop streaming and release the serial port
 //   status        - running, counters, last error and the most recent lines (polled by the page)
+//   logs          - the saved stream files, newest first (2026-10-13; downloaded through StreamLogServlet)
+//   deleteLog     - name=<file>
 // See SerialChatStreamer.
 public class StreamToChatProcessingHandler extends ProcessingFormHandler {
 
@@ -52,6 +54,17 @@ public class StreamToChatProcessingHandler extends ProcessingFormHandler {
 				}
 				logger.info("Stream 2 Chat started -> " + request.getParameter("target"));
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", streamer.status().toString());
+			}
+			if ("logs".equals(action)) {
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", SerialChatStreamer.listLogs().toString());
+			}
+			if ("deleteLog".equals(action)) {
+				java.io.File f = SerialChatStreamer.logFile(request.getParameter("name"));
+				if (f == null || !f.delete()) {
+					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Could not delete " + request.getParameter("name"));
+				}
+				logger.info("Stream log deleted: " + f.getName());
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", SerialChatStreamer.listLogs().toString());
 			}
 			if ("stop".equals(action)) {
 				streamer.stop();

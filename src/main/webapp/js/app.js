@@ -266,6 +266,7 @@ $(function(){
 	$('#stream-chat-btn').on('click', function(){
 		loadStreamChatParticipants();
 		refreshStreamChat();
+		loadStreamLogs();
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('stream-chat-modal')).show();
 	});
 	$('#stream-chat-refresh-btn').on('click', loadStreamChatParticipants);
@@ -287,9 +288,22 @@ $(function(){
 				var result = JSON.parse(raw);
 				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
 				refreshStreamChat();
+				loadStreamLogs();
 			},
 			error: function(){ alert('Request failed.'); },
 			complete: function(){ $('#stream-chat-toggle-btn').prop('disabled', false); }
+		});
+	});
+	$('#stream-chat-logs').on('click', '.stream-log-delete', function(){
+		var name = $(this).data('name');
+		if(!confirm('Delete ' + name + '?')) return;
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet", data: {formName: "StreamToChat", action: "deleteLog", name: name},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
+				loadStreamLogs();
+			}
 		});
 	});
 	$('#stream-chat-modal').on('hidden.bs.modal', function(){
@@ -887,17 +901,46 @@ function loadStreamChatParticipants(){
 		success: function(raw){
 			var result = JSON.parse(raw);
 			if(result[STATUS_KEY] !== STATUS_SUCCESS){
-				$sel.html('<option value="">' + escapeHtml(result[DATA_KEY]) + '</option>');
+				streamFileOnlyOption($sel, 'chats unavailable - ' + result[DATA_KEY]);
 				return;
 			}
 			var data = JSON.parse(result[DATA_KEY]);
 			$sel.empty();
+			$sel.append($('<option>').val(STREAM_FILE_ONLY).text(STREAM_FILE_ONLY + ' (no WiFi needed)'));
 			data.participants.forEach(function(name){
 				$sel.append($('<option>').val(name).text(name));
 			});
 			if(previous && data.participants.indexOf(previous) >= 0) $sel.val(previous);
 		},
-		error: function(){ $sel.html('<option value="">Cannot reach FactoryChat</option>'); }
+		error: function(){ streamFileOnlyOption($sel, 'cannot reach FactoryChat'); }
+	});
+}
+
+// Must match SerialChatStreamer.FILE_ONLY.
+var STREAM_FILE_ONLY = 'File only';
+
+function streamFileOnlyOption($sel, why){
+	$sel.empty().append($('<option>').val(STREAM_FILE_ONLY).text(STREAM_FILE_ONLY + ' (' + why + ')'));
+}
+
+function loadStreamLogs(){
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "StreamToChat", action: "logs"},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			var $logs = $('#stream-chat-logs');
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){ $logs.text(result[DATA_KEY]); return; }
+			var logs = JSON.parse(result[DATA_KEY]);
+			if(!logs.length){ $logs.html('<span class="text-muted">None yet.</span>'); return; }
+			$logs.empty();
+			logs.forEach(function(l){
+				var kb = l.size < 1024 ? l.size + ' B' : Math.round(l.size / 1024) + ' KB';
+				$logs.append($('<div class="d-flex align-items-center" style="gap:8px;padding:3px 0;border-bottom:1px solid #eee;">')
+					.append($('<a style="flex:1;word-break:break-all;" download>').attr('href', 'streamlogs/' + encodeURIComponent(l.name)).text(l.name))
+					.append($('<span class="text-muted" style="white-space:nowrap;">').text(kb))
+					.append($('<button type="button" class="btn btn-outline-danger btn-sm stream-log-delete">').attr('data-name', l.name).html('&times;')));
+			});
+		}
 	});
 }
 
@@ -912,9 +955,11 @@ function refreshStreamChat(){
 			$('#stream-chat-toggle-btn').text(s.running ? 'Stop' : 'Start')
 				.toggleClass('btn-success', !s.running).toggleClass('btn-danger', s.running);
 			$('#stream-chat-target, #stream-chat-command').prop('disabled', s.running);
+			var where = s.chat ? '<strong>' + escapeHtml(s.target) + '</strong> and ' : '';
+			var fileTxt = s.file ? 'file <strong>' + escapeHtml(s.file) + '</strong>' : 'a file';
 			var status = s.running
-				? 'Streaming to <strong>' + escapeHtml(s.target) + '</strong> from ' + escapeHtml(s.port) + ': ' + s.linesRead + ' lines, ' + s.messagesSent + ' messages'
-				: (s.linesRead > 0 ? 'Stopped after ' + s.linesRead + ' lines (' + s.messagesSent + ' messages to ' + escapeHtml(s.target) + ')' : 'Not streaming');
+				? 'Streaming to ' + where + fileTxt + ' from ' + escapeHtml(s.port) + ': ' + s.linesRead + ' lines' + (s.chat ? ', ' + s.messagesSent + ' messages' : '')
+				: (s.linesRead > 0 ? 'Stopped after ' + s.linesRead + ' lines, saved as ' + escapeHtml(s.file || '-') : 'Not streaming');
 			if(s.lastError) status += '<div class="text-danger">' + escapeHtml(s.lastError) + '</div>';
 			$('#stream-chat-status').html(status);
 			var $body = $('#stream-chat-body');

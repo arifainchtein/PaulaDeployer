@@ -19,6 +19,16 @@
     <url-pattern>/PaulaDeployerServlet</url-pattern>
   </servlet-mapping>
 
+  <!-- Stream 2 Chat log files (2026-10-13): /streamlogs/<name>.txt -->
+  <servlet>
+    <servlet-name>StreamLogServlet</servlet-name>
+    <servlet-class>com.digitalstables.pauladeployer.servlet.StreamLogServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>StreamLogServlet</servlet-name>
+    <url-pattern>/streamlogs/*</url-pattern>
+  </servlet-mapping>
+
   <welcome-file-list>
     <welcome-file>index.html</welcome-file>
   </welcome-file-list>

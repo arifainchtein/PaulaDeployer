@@ -99,7 +99,9 @@
 </div>
 
 <!-- Stream 2 Chat (2026-10-12): pick a FactoryChat participant, Start sends the start command
-     (debug#1) to the device and forwards everything it prints to that chat until Stop. -->
+     (debug#1) to the device and forwards everything it prints to that chat until Stop.
+     2026-10-13: every stream is also saved to a file; "File only" needs no WiFi. Saved logs are
+     listed below with a download link (then the photo upload page sends them to a chat). -->
 <div class="modal fade" id="stream-chat-modal" tabindex="-1">
   <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content">
@@ -118,6 +120,9 @@
         <input type="text" id="stream-chat-command" class="form-control" value="debug#1">
         <div id="stream-chat-status" style="margin:10px 0 6px 0;font-size:14px;"></div>
         <div id="stream-chat-body" class="pd-command-response" style="max-height:45vh;overflow-y:auto;"></div>
+        <h6 style="margin-top:14px;">Saved logs</h6>
+        <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">Every stream is saved here. Download one to the phone, then send it to the chat from the photo upload page.</div>
+        <div id="stream-chat-logs" style="font-size:14px;"></div>
       </div>
       <div class="modal-footer">
         <button id="stream-chat-toggle-btn" type="button" class="btn btn-success me-auto">Start</button>
