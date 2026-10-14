@@ -110,6 +110,23 @@ public class PaulaRadio {
 			logger.warn("Pi clock not NTP-synced - Paula's clock left as it is");
 			return;
 		}
+		writeSetTime();
+	}
+
+	// The Nearby Devices "Set Paula's clock" button: sets it from the Pi's clock whether or not the
+	// Pi is NTP-synced (the page shows that, so the user decides). Returns null when it worked.
+	public synchronized String setClockNow() {
+		if (!ensureOpen()) return "Paula not found - is it plugged in?";
+		try {
+			writeSetTime();
+			return null;
+		} catch (IOException | InterruptedException e) {
+			close();
+			return "Could not set Paula's clock: " + e.getMessage();
+		}
+	}
+
+	private void writeSetTime() throws IOException, InterruptedException {
 		String command = SetDeviceTimeProcessingHandler.setTimeCommand();
 		output.write(command.getBytes(StandardCharsets.UTF_8));
 		output.flush();

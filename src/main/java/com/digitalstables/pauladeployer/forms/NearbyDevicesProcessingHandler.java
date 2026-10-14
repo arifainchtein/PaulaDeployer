@@ -9,6 +9,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONObject;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+
 import com.digitalstables.pauladeployer.flash.PaulaRadio;
 import com.digitalstables.pauladeployer.servlet.ProcessingFormHandler;
 import com.digitalstables.pauladeployer.utils.Constants;
@@ -21,6 +25,10 @@ import com.digitalstables.pauladeployer.utils.Utils;
 // which keeps the port open so Paula's lists survive between requests.
 //   action=list                         -> Paula's GetNearbyDevices JSON
 //   action=wifi, serial=<16 hex>, state=on|off
+//   action=setClock                     -> sets Paula's RTC from the Pi's clock
+// The list also carries clockOffsetSec (Paula's clock minus the Pi's) - a Daffodil rejects
+// commands whose time is more than 15 min from its own clock (2026-10-14: every Paula command was
+// rejected while Annabelle's worked).
 public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 
 	private static final Logger logger = LogManager.getLogger("NearbyDevicesProcessingHandler");
@@ -46,6 +54,11 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 				logger.info("WiFi " + state + " requested for " + serial);
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", "Queued");
 			}
+			if("setClock".equals(action)){
+				String error = PaulaRadio.get().setClockNow();
+				if(error != null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", error);
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", "Clock set");
+			}
 			String reply = PaulaRadio.get().command("GetNearbyDevices", TIMEOUT_MILLISECONDS);
 			if(reply == null){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in?");
@@ -53,6 +66,13 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 			for(String line : reply.split("\n")){
 				if(line.startsWith("{") && line.contains("\"devices\"")){
 					JSONObject data = new JSONObject(line.trim());
+					if(data.has("paulaTime")){
+						// Code time = the devices' local wall-clock fields counted as UTC seconds (PCF8563TimeManager::dateAsSeconds)
+						long piCodeTime = LocalDateTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE)).toEpochSecond(ZoneOffset.UTC);
+						data.put("clockOffsetSec", data.getLong("paulaTime") - piCodeTime);
+					}
+					Boolean ntp = Utils.isNtpSynchronized();
+					if(ntp != null) data.put("piNtpSynced", ntp.booleanValue());
 					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 				}
 			}

@@ -282,6 +282,18 @@ $(function(){
 		clearInterval(nearbyTimer);
 		nearbyTimer = null;
 	});
+	$('#nearby-clock').on('click', '#nearby-set-clock', function(){
+		var $b = $(this).prop('disabled', true);
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "setClock"},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
+				setTimeout(loadNearbyDevices, 1500);
+			},
+			error: function(){ alert('Request failed.'); $b.prop('disabled', false); }
+		});
+	});
 	$('#nearby-list').on('click', '.nearby-wifi', function(){
 		var $b = $(this).prop('disabled', true);
 		$.ajax({
@@ -1076,7 +1088,9 @@ function loadNearbyDevices(){
 				$('#nearby-status').html('<span class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</span>');
 				return;
 			}
-			var devices = JSON.parse(result[DATA_KEY]).devices || [];
+			var listing = JSON.parse(result[DATA_KEY]);
+			var devices = listing.devices || [];
+			showNearbyClock(listing);
 			$('#nearby-status').text(devices.length ? '' : 'None heard yet - waiting for a device to send.');
 			$('#nearby-list').html(devices.map(nearbyDeviceHtml).join(''));
 		},
@@ -1101,4 +1115,17 @@ function nearbyDeviceHtml(d){
 		+ '<div>' + wifi + ' &middot; ' + Number(d.battery).toFixed(2) + ' V &middot; ' + (d.sleep > 0 ? 'asleep ' + d.sleep + ' s' : 'awake')
 		+ ' &middot; heard ' + nearbyAgo(d.ageSec) + ' (' + d.rssi + ' dBm)</div>' + note
 		+ '<div class="text-muted" style="font-family:monospace;font-size:12px;">' + escapeHtml(d.serial) + '</div></div>';
+}
+
+// Paula's clock against the Pi's - Daffodils reject commands more than 15 min off.
+function showNearbyClock(listing){
+	if(listing.clockOffsetSec === undefined){ $('#nearby-clock').empty(); return; }
+	var off = listing.clockOffsetSec, abs = Math.abs(off);
+	var text = abs < 60 ? 'on time (' + off + ' s)' : (abs >= 3600 ? Math.floor(abs / 3600) + ' h ' : '') + Math.floor((abs % 3600) / 60) + ' min ' + (off > 0 ? 'fast' : 'slow');
+	var color = abs < 60 ? '#2e7d32' : abs < 900 ? '#ef6c00' : '#c62828';
+	var html = 'Paula\'s clock: <strong style="color:' + color + '">' + text + '</strong>';
+	if(abs >= 900) html += ' - Daffodils will reject its commands';
+	if(listing.piNtpSynced === false) html += '<div class="text-danger">The Pi\'s clock is not internet-synced - press Set Pi Time first.</div>';
+	if(abs >= 60) html += ' <button type="button" class="btn btn-sm btn-warning" id="nearby-set-clock">Set Paula\'s clock</button>';
+	$('#nearby-clock').html(html);
 }
