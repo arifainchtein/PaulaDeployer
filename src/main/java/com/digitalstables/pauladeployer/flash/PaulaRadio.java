@@ -1,8 +1,6 @@
 package com.digitalstables.pauladeployer.flash;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -30,8 +28,8 @@ public class PaulaRadio {
 	private static final int READ_TIMEOUT_MILLISECONDS = 200;
 
 	private SerialPort port;
-	private BufferedReader input;
 	private OutputStream output;
+	private final StringBuilder partialLine = new StringBuilder();
 
 	public static PaulaRadio get() {
 		return INSTANCE;
@@ -47,21 +45,20 @@ public class PaulaRadio {
 	public synchronized String command(String command, int timeoutMillis) {
 		if (!ensureOpen()) return null;
 		try {
-			while (input.ready()) input.readLine();  // debug output / boot messages since last time
+			drain();  // debug output / boot messages since last time
 			output.write(command.getBytes(StandardCharsets.UTF_8));
 			output.flush();
 			StringBuilder transcript = new StringBuilder();
 			long deadline = System.currentTimeMillis() + timeoutMillis;
 			while (System.currentTimeMillis() < deadline) {
-				if (input.ready()) {
-					String line = input.readLine();
-					if (line == null) continue;
-					if (transcript.length() > 0) transcript.append("\n");
-					transcript.append(line);
-					if (line.startsWith("Ok-") || line.startsWith("Failure")) return transcript.toString();
-				} else {
+				String line = nextLine();
+				if (line == null) {
 					Thread.sleep(50);
+					continue;
 				}
+				if (transcript.length() > 0) transcript.append("\n");
+				transcript.append(line);
+				if (line.startsWith("Ok-") || line.startsWith("Failure")) return transcript.toString();
 			}
 			logger.warn("No answer from Paula to " + command + " - closing the port");
 		} catch (IOException | InterruptedException e) {
@@ -85,7 +82,6 @@ public class PaulaRadio {
 			return false;
 		}
 		port = found;
-		input = new BufferedReader(new InputStreamReader(port.getInputStream(), StandardCharsets.UTF_8));
 		output = port.getOutputStream();
 		logger.info("Holding Paula's port " + port.getSystemPortName() + " open");
 		try {
@@ -131,14 +127,42 @@ public class PaulaRadio {
 		output.write(command.getBytes(StandardCharsets.UTF_8));
 		output.flush();
 		Thread.sleep(1500);
-		while (input.ready()) input.readLine();
+		drain();  // Paula echoes the date without a line ending
 		logger.info("Set Paula's clock: " + command);
+	}
+
+	// Reads bytes straight from the port (2026-10-14): a BufferedReader's readLine() waited for the
+	// end of a line that Paula's SetTime echo never sends, hit the port's read timeout and threw -
+	// "the request timed out", and the port closed (resetting Paula). Never blocks.
+	private String nextLine() {
+		while (port.bytesAvailable() > 0) {
+			byte[] one = new byte[1];
+			if (port.readBytes(one, 1) != 1) break;
+			char c = (char) (one[0] & 0xff);
+			if (c == '\n') {
+				String line = partialLine.toString();
+				partialLine.setLength(0);
+				return line;
+			}
+			if (c != '\r') partialLine.append(c);
+		}
+		return null;
+	}
+
+	// Discards everything waiting, half lines included.
+	private void drain() {
+		int available;
+		while ((available = port.bytesAvailable()) > 0) {
+			byte[] junk = new byte[available];
+			if (port.readBytes(junk, available) <= 0) break;
+		}
+		partialLine.setLength(0);
 	}
 
 	private void close() {
 		if (port != null) port.closePort();
 		port = null;
-		input = null;
 		output = null;
+		partialLine.setLength(0);
 	}
 }
