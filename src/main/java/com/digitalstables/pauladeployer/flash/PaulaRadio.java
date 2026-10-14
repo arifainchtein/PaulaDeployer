@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.digitalstables.pauladeployer.forms.SetDeviceTimeProcessingHandler;
+import com.digitalstables.pauladeployer.utils.Utils;
 import com.fazecast.jSerialComm.SerialPort;
 
 // One serial connection to Paula's own Wally that stays open (2026-10-14), for the Nearby devices
@@ -88,10 +90,32 @@ public class PaulaRadio {
 		logger.info("Holding Paula's port " + port.getSystemPortName() + " open");
 		try {
 			Thread.sleep(BOOT_WAIT_MILLISECONDS);
+			setPaulaClock();
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
+		} catch (IOException e) {
+			logger.warn("Could not set Paula's clock: " + e.getMessage());
 		}
 		return true;
+	}
+
+	// Paula's commands carry a code for Paula's own time, and a Daffodil rejects them when that time
+	// is more than 15 min from its clock (2026-10-14: Paula's were all rejected while Annabelle's
+	// worked). So Paula's RTC is set from the Pi's each time the port is opened - only when the Pi's
+	// clock is NTP-synced, since an offline Pi's clock can be hours off. Paula's SetTime sends no
+	// "Ok-" line, so this doesn't wait for one; Paula reads a command after ~1 s of silence, so the
+	// pause keeps the next command from running into this one.
+	private void setPaulaClock() throws IOException, InterruptedException {
+		if (!Boolean.TRUE.equals(Utils.isNtpSynchronized())) {
+			logger.warn("Pi clock not NTP-synced - Paula's clock left as it is");
+			return;
+		}
+		String command = SetDeviceTimeProcessingHandler.setTimeCommand();
+		output.write(command.getBytes(StandardCharsets.UTF_8));
+		output.flush();
+		Thread.sleep(1500);
+		while (input.ready()) input.readLine();
+		logger.info("Set Paula's clock: " + command);
 	}
 
 	private void close() {

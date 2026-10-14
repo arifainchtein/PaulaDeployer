@@ -31,14 +31,20 @@ public class SetDeviceTimeProcessingHandler extends ProcessingFormHandler{
 		super(req, res, servletContext);
 	}
 
+	// SetTime#date#month#yy#dayOfWeek#hour#minute#second for this Pi's clock now, in the devices' zone.
+	// Also used by PaulaRadio to set Paula's own clock.
+	public static String setTimeCommand(){
+		ZonedDateTime now = ZonedDateTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE));
+		int dayOfWeek = now.getDayOfWeek().getValue() % 7 + 1;  // java: Monday=1..Sunday=7 -> Sunday=1..Saturday=7
+		return String.format("SetTime#%d#%d#%02d#%d#%d#%02d#%02d",
+				now.getDayOfMonth(), now.getMonthValue(), now.getYear() % 100, dayOfWeek,
+				now.getHour(), now.getMinute(), now.getSecond());
+	}
+
 	public JSONObject process(){
 		JSONObject toReturn;
 		try{
-			ZonedDateTime now = ZonedDateTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE));
-			int dayOfWeek = now.getDayOfWeek().getValue() % 7 + 1;  // java: Monday=1..Sunday=7 -> Sunday=1..Saturday=7
-			String command = String.format("SetTime#%d#%d#%02d#%d#%d#%02d#%02d",
-					now.getDayOfMonth(), now.getMonthValue(), now.getYear() % 100, dayOfWeek,
-					now.getHour(), now.getMinute(), now.getSecond());
+			String command = setTimeCommand();
 			logger.info("Setting device time: " + command);
 
 			FirmwareFlasher flasher = new FirmwareFlasher();

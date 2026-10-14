@@ -1094,7 +1094,7 @@ function nearbyDeviceHtml(d){
 	else if(c && c.state === 2) note = '<div class="text-muted">Turned ' + (c.on ? 'on' : 'off') + ' ' + nearbyAgo(c.ageSec) + '</div>';
 	else if(c && c.state === 3) note = '<div class="text-danger">Gave up after 15 min - device not heard</div>';
 	var btn = pending ? '<button type="button" class="btn btn-outline-secondary btn-sm" disabled>Waiting...</button>'
-		: '<button type="button" class="btn btn-outline-primary btn-sm nearby-wifi" data-serial="' + escapeHtml(d.serial) + '" data-state="' + (on ? 'off' : 'on') + '">'
+		: '<button type="button" class="btn ' + (on ? 'btn-outline-secondary' : 'btn-primary') + ' btn-sm nearby-wifi" data-serial="' + escapeHtml(d.serial) + '" data-state="' + (on ? 'off' : 'on') + '">'
 		  + (on ? 'Turn WiFi off' : 'Turn WiFi on') + '</button>';
 	return '<div style="border-bottom:1px solid #eee;padding:8px 0;font-size:14px;">'
 		+ '<div class="d-flex justify-content-between align-items-center" style="gap:8px;"><strong>' + escapeHtml(d.name || d.serial) + '</strong>' + btn + '</div>'
