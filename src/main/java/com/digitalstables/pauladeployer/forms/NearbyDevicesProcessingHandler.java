@@ -12,6 +12,7 @@ import org.json.JSONObject;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 import com.digitalstables.pauladeployer.flash.PaulaRadio;
 import com.digitalstables.pauladeployer.servlet.ProcessingFormHandler;
@@ -33,6 +34,11 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 
 	private static final Logger logger = LogManager.getLogger("NearbyDevicesProcessingHandler");
 	private static final int TIMEOUT_MILLISECONDS = 5000;
+	// The devices' code time is their local wall-clock fields counted as UTC seconds MINUS this
+	// (TimeManager.h timeZoneHours = 10, PCF8563TimeManager::dateAsSeconds) - the same on every
+	// sketch. Leaving it out made a correct Paula look "10 h slow" (2026-10-14).
+	private static final int CODE_TIME_ZONE_HOURS = 10;
+	private static final DateTimeFormatter HMS = DateTimeFormatter.ofPattern("HH:mm:ss");
 
 	public NearbyDevicesProcessingHandler(HttpServletRequest req, HttpServletResponse res, ServletContext servletContext) throws ServletException{
 		super(req, res, servletContext);
@@ -67,9 +73,12 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 				if(line.startsWith("{") && line.contains("\"devices\"")){
 					JSONObject data = new JSONObject(line.trim());
 					if(data.has("paulaTime")){
-						// Code time = the devices' local wall-clock fields counted as UTC seconds (PCF8563TimeManager::dateAsSeconds)
-						long piCodeTime = LocalDateTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE)).toEpochSecond(ZoneOffset.UTC);
-						data.put("clockOffsetSec", data.getLong("paulaTime") - piCodeTime);
+						LocalDateTime piLocal = LocalDateTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE));
+						long piCodeTime = piLocal.toEpochSecond(ZoneOffset.UTC) - CODE_TIME_ZONE_HOURS * 3600L;
+						long paulaTime = data.getLong("paulaTime");
+						data.put("clockOffsetSec", paulaTime - piCodeTime);
+						data.put("paulaClock", LocalDateTime.ofEpochSecond(paulaTime + CODE_TIME_ZONE_HOURS * 3600L, 0, ZoneOffset.UTC).format(HMS));
+						data.put("piClock", piLocal.format(HMS));
 					}
 					Boolean ntp = Utils.isNtpSynchronized();
 					if(ntp != null) data.put("piNtpSynced", ntp.booleanValue());

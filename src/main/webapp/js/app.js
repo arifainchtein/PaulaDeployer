@@ -1123,7 +1123,8 @@ function showNearbyClock(listing){
 	var off = listing.clockOffsetSec, abs = Math.abs(off);
 	var text = abs < 60 ? 'on time (' + off + ' s)' : (abs >= 3600 ? Math.floor(abs / 3600) + ' h ' : '') + Math.floor((abs % 3600) / 60) + ' min ' + (off > 0 ? 'fast' : 'slow');
 	var color = abs < 60 ? '#2e7d32' : abs < 900 ? '#ef6c00' : '#c62828';
-	var html = 'Paula\'s clock: <strong style="color:' + color + '">' + text + '</strong>';
+	var html = 'Paula\'s clock: <strong style="color:' + color + '">' + text + '</strong>'
+		+ (listing.paulaClock ? ' <span class="text-muted">(Paula ' + escapeHtml(listing.paulaClock) + ', Pi ' + escapeHtml(listing.piClock) + ')</span>' : '');
 	if(abs >= 900) html += ' - Daffodils will reject its commands';
 	if(listing.piNtpSynced === false) html += '<div class="text-danger">The Pi\'s clock is not internet-synced - press Set Pi Time first.</div>';
 	if(abs >= 60) html += ' <button type="button" class="btn btn-sm btn-warning" id="nearby-set-clock">Set Paula\'s clock</button>';
