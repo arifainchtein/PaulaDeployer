@@ -2,6 +2,8 @@ package com.digitalstables.pauladeployer.forms;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -33,6 +35,14 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 	private static final Logger logger = LogManager.getLogger("StartDeployProcessingHandler");
 	private static final int POST_FLASH_PING_ATTEMPTS = 4;
 	private static final long POST_FLASH_PING_RETRY_MILLIS = 3000;
+
+	public static final String NEW_DEPLOYMENT_TYPE = "NewDeployment";
+	private static final String SERIAL_EXTRACTOR_BIN_NAME = "serialnumberextractor.ino.bin";
+	private static final String SERIAL_EXTRACTOR_PARTITIONS_NAME = "serialnumberextractor.ino.partitions.bin";
+	private static final Pattern SERIAL_NUMBER_PATTERN = Pattern.compile("([0-9a-fA-F]{12})Ok");
+	// The factory bench uses 8s for each CSW calibration reset; longer here since the operator is
+	// reading the prompt off a phone in the field.
+	private static final long CSW_RESET_WAIT_MILLIS = 15000;
 
 	public StartDeployProcessingHandler(HttpServletRequest req, HttpServletResponse res, ServletContext servletContext) throws ServletException{
 		super(req, res, servletContext);
@@ -83,7 +93,13 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			}
 			logger.info("Created deployAttempt id=" + attemptId + " for product=" + productName + " (" + repoName + " v" + version + ") - starting background flash thread");
 
-			Thread worker = new Thread(() -> runDeploy(aDBManager, attemptId, zipFile, repoName, version, productDefinitionName));
+			// "NewDeployment" manifests (factory webapp's New Deployment button) are for a unit that
+			// has never been through Configure Device - see runNewDeployment.
+			JSONObject configuration = manifest.optJSONObject("configuration");
+			boolean newDeployment = NEW_DEPLOYMENT_TYPE.equals(manifest.optString("deploymentType", "")) && configuration != null;
+			Thread worker = newDeployment
+					? new Thread(() -> runNewDeployment(aDBManager, attemptId, zipFile, repoName, version, configuration))
+					: new Thread(() -> runDeploy(aDBManager, attemptId, zipFile, repoName, version, productDefinitionName));
 			worker.setDaemon(true);
 			worker.start();
 
@@ -165,6 +181,158 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			logger.info("attemptId=" + attemptId + " - finished, success=" + success);
 			aDBManager.completeAttempt(attemptId, success);
 		}
+	}
+
+	// The field version of the factory webapp's ConfigureDeviceProcessingHandler, for a manifest
+	// from its "New Deployment" button: flash serialnumberextractor, read the serial number, inject
+	// product definition/secret/time/device name/short name/timezone/wifi AP into NVS while the
+	// extractor is running (it listens on Serial right after boot and writes the same NVS keys the
+	// real firmware reads), then flash the product firmware and - for boards with a config switch -
+	// run the CSW calibration. Same
+	// command strings and order as ConfigureDeviceProcessingHandler - keep the two in step. The
+	// serial number is stored on the attempt row; the Confirm footer button sends it back to the
+	// factory (CompleteNewDeployment) once this Paula is on the factory network again.
+	private void runNewDeployment(PersistenceManager aDBManager, int attemptId, File zipFile, String repoName, int version, JSONObject configuration){
+		logger.info("Background new-deployment thread started for attemptId=" + attemptId);
+		boolean success = false;
+		try{
+			File workDir = new File(Constants.PAULAUPLOADER_HOME, "deployWork/" + attemptId);
+			workDir.mkdirs();
+
+			aDBManager.appendLog(attemptId, "New deployment - extracting firmware from " + zipFile.getName() + "...");
+			String binFileName = repoName + ".ino.bin";
+			String partitionsFileName = repoName + ".ino.partitions.bin";
+			String wwwFileName = repoName + ".www.bin";
+			extractEntries(zipFile, workDir, binFileName, partitionsFileName, wwwFileName, SERIAL_EXTRACTOR_BIN_NAME, SERIAL_EXTRACTOR_PARTITIONS_NAME);
+
+			File binFile = new File(workDir, binFileName);
+			File partitionsFile = new File(workDir, partitionsFileName);
+			File extractorBinFile = new File(workDir, SERIAL_EXTRACTOR_BIN_NAME);
+			File extractorPartitionsFile = new File(workDir, SERIAL_EXTRACTOR_PARTITIONS_NAME);
+			if(!binFile.isFile() || !partitionsFile.isFile() || !extractorBinFile.isFile() || !extractorPartitionsFile.isFile()){
+				logger.warn("attemptId=" + attemptId + " - firmware/extractor files missing after extraction from " + zipFile.getAbsolutePath());
+				aDBManager.appendLog(attemptId, "Firmware files not found inside the deploy package - aborting.");
+				return;
+			}
+
+			FirmwareFlasher flasher = new FirmwareFlasher();
+
+			//
+			// Step 1 flash the serial number extractor
+			//
+			aDBManager.appendLog(attemptId, "Step 1/5: flashing the serial number extractor - watch for esptool's prompts below.");
+			if(!flasher.flash(extractorBinFile.getAbsolutePath(), extractorPartitionsFile.getAbsolutePath(), workDir.getAbsolutePath(),
+					true, line -> aDBManager.appendLog(attemptId, line))){
+				aDBManager.appendLog(attemptId, "Flashing the serial number extractor failed.");
+				return;
+			}
+			// flash() leaves this marker behind - clear it so the product flash's own check is real
+			new File(workDir, "firmwareUploadComplete").delete();
+			Thread.sleep(5000);
+
+			//
+			// Step 2 read the serial number
+			//
+			aDBManager.appendLog(attemptId, "Step 2/5: reading the serial number...");
+			String serialResult = flasher.sendCommandToTarget("GetSerialNumber", true);
+			Matcher matcher = SERIAL_NUMBER_PATTERN.matcher(serialResult == null ? "" : serialResult);
+			if(!matcher.find()){
+				logger.warn("attemptId=" + attemptId + " - GetSerialNumber reply not recognised: " + serialResult);
+				aDBManager.appendLog(attemptId, "Could not read the serial number (got: " + serialResult + ") - aborting.");
+				return;
+			}
+			String serialNumber = matcher.group(1);
+			aDBManager.updateAttemptSerialNumber(attemptId, serialNumber);
+			aDBManager.appendLog(attemptId, "Serial number: " + serialNumber);
+
+			//
+			// Step 3 inject the configuration into NVS / the RTC chip
+			//
+			aDBManager.appendLog(attemptId, "Step 3/5: writing the device configuration...");
+			sendConfigCommand(flasher, aDBManager, attemptId, "SetProductDefinition#" + configuration.optString("productDefinitionName") + "#" + configuration.optString("powerSource")
+					+ "#" + configuration.optString("battery") + "#" + configuration.optString("pcbSummary") + "#" + configuration.optString("firmwareSummary"));
+			sendConfigCommand(flasher, aDBManager, attemptId, "SetSecret#" + configuration.optString("secret") + "#6#30");
+			sendConfigCommand(flasher, aDBManager, attemptId, SetDeviceTimeProcessingHandler.setTimeCommand());
+			sendConfigCommand(flasher, aDBManager, attemptId, "SetDeviceName#" + configuration.optString("deviceName"));
+			sendConfigCommand(flasher, aDBManager, attemptId, "SetDeviceShortName#" + configuration.optString("deviceShortName"));
+			if(!configuration.optString("timezone").isEmpty()){
+				sendConfigCommand(flasher, aDBManager, attemptId, "SetTimezone#" + configuration.optString("timezone"));
+			}
+			sendConfigCommand(flasher, aDBManager, attemptId, "ConfigWifiAP#" + configuration.optString("apSsid") + "#" + configuration.optString("apPassword") + "#" + configuration.optString("deviceName"));
+
+			//
+			// Step 4 flash the product firmware - boots straight into the config above
+			//
+			if(new File(workDir, wwwFileName).isFile()){
+				aDBManager.appendLog(attemptId, "Package includes the device's website (www partition) - will flash it too.");
+			}
+			aDBManager.appendLog(attemptId, "Step 4/5: flashing " + repoName + " v" + version + " - watch for esptool's prompts below.");
+			if(!flasher.flash(binFile.getAbsolutePath(), partitionsFile.getAbsolutePath(), workDir.getAbsolutePath(),
+					true, line -> aDBManager.appendLog(attemptId, line))){
+				aDBManager.appendLog(attemptId, "Flashing the product firmware failed.");
+				return;
+			}
+
+			aDBManager.appendLog(attemptId, "Flash complete. Pinging the device...");
+			String pingResult = null;
+			for(int attempt = 1; attempt <= POST_FLASH_PING_ATTEMPTS; attempt++){
+				pingResult = flasher.pingTarget(true);
+				if(pingResult != null && pingResult.contains("Ok")) break;
+				if(attempt < POST_FLASH_PING_ATTEMPTS){
+					aDBManager.appendLog(attemptId, "No Ping reply yet (device still booting?) - retrying (" + (attempt + 1) + "/" + POST_FLASH_PING_ATTEMPTS + ")...");
+					Thread.sleep(POST_FLASH_PING_RETRY_MILLIS);
+				}
+			}
+			if(pingResult == null || !pingResult.contains("Ok")){
+				logger.warn("attemptId=" + attemptId + " - post-flash Ping did not return Ok (got: " + pingResult + ")");
+				aDBManager.appendLog(attemptId, "Device did not respond to Ping after flashing - flagging as failed.");
+				return;
+			}
+			aDBManager.appendLog(attemptId, "Ping OK - device is alive and running the new firmware.");
+			success = true;
+
+			//
+			// Step 5 CSW calibration - only for boards with a config switch (Daffodil); the factory
+			// sets configuration.cswCalibration from the New Deployment popup's checkbox. Same
+			// two-reset sequence as the factory bench. Not fatal: the device is configured and
+			// flashed either way, and it can be redone with Calibrate CSW from the toolbar.
+			//
+			if(configuration.optBoolean("cswCalibration", false)){
+				aDBManager.appendLog(attemptId, "Step 5/5: CSW calibration.");
+				aDBManager.appendLog(attemptId, "*** Set the config switch to 00000, then press RESET now ***");
+				Thread.sleep(CSW_RESET_WAIT_MILLIS);
+				String calibrateResult = flasher.sendCommandToTarget("CalibrateCSWReference", true);
+				aDBManager.appendLog(attemptId, "CalibrateCSWReference: " + calibrateResult);
+				aDBManager.appendLog(attemptId, "*** Calibration armed - press RESET again now (switches still at 00000) ***");
+				Thread.sleep(CSW_RESET_WAIT_MILLIS);
+				String cswVerifyResult = flasher.sendCommandToTarget("printCSWData", true);
+				if(cswVerifyResult == null || cswVerifyResult.contains("cswReferenceRaw=0 ")){
+					aDBManager.appendLog(attemptId, "WARNING: CSW calibration did not take - repeat it with Calibrate CSW.");
+				}else{
+					aDBManager.appendLog(attemptId, "CSW calibration captured.");
+				}
+				aDBManager.appendLog(attemptId, "*** Set the config switch to the unit's real function, then press RESET one last time ***");
+			}else{
+				aDBManager.appendLog(attemptId, "Step 5/5: no config switch on this board - skipping CSW calibration.");
+			}
+			aDBManager.appendLog(attemptId, "Device configured. Press Confirm when this Paula is back on the factory network to record serial number " + serialNumber + ".");
+		}catch(Exception e){
+			logger.warn("attemptId=" + attemptId + " - " + Utils.getStringException(e));
+			aDBManager.appendLog(attemptId, "Error: " + e.getMessage());
+			success = false;
+		}finally{
+			logger.info("attemptId=" + attemptId + " - new deployment finished, success=" + success);
+			aDBManager.completeAttempt(attemptId, success);
+		}
+	}
+
+	// Logs the command and the device's reply. Like ConfigureDeviceProcessingHandler, a bad reply
+	// is logged but doesn't stop the run - the operator sees it in the terminal.
+	private void sendConfigCommand(FirmwareFlasher flasher, PersistenceManager aDBManager, int attemptId, String command){
+		String commandName = command.contains("#") ? command.substring(0, command.indexOf('#')) : command;
+		String result = flasher.sendCommandToTarget(command, true);
+		logger.info("attemptId=" + attemptId + " - " + commandName + " -> " + result);
+		aDBManager.appendLog(attemptId, commandName + ": " + (result == null ? "no reply" : result.replace("\n", " ")));
 	}
 
 	// Daffodil.ino's "firmware" field (what Inspect shows) is just an operator-set NVS preference -

@@ -146,6 +146,7 @@ html, body {
 
 .pd-tile-name { font-size: 17px; font-weight: 700; line-height: 1.2; }
 .pd-tile-definition { font-size: 12px; margin-top: 6px; opacity: 0.85; }
+.pd-tile-serial { font-size: 11px; margin-top: 4px; opacity: 0.85; font-family: monospace; }
 .pd-tile-status-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; font-weight: 700; }
 
 .pd-tile-pending { background: #ffd43b; }

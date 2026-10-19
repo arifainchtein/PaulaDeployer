@@ -1,17 +1,20 @@
 package com.digitalstables.pauladeployer.forms;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
@@ -30,6 +33,11 @@ import com.digitalstables.pauladeployer.utils.Utils;
 // button makes (see afterlogin.js's .confirm-configuration-upgrade handler / factory webapp's
 // ConfirmConfigurationUpgradeProcessingHandler), then gets marked reported so it isn't sent twice.
 // Plain HttpURLConnection, same pattern as PaulaUploader's own FactorySyncClient.
+//
+// "New Deployment" attempts (manifest deploymentType NewDeployment - see StartDeployProcessingHandler.
+// runNewDeployment) call the factory's CompleteNewDeployment instead, which also records the serial
+// number this Paula read off the device. The type is read from the manifest, which is still on
+// disk here - RemoveConfirmed only deletes packages once they're reported.
 public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 
 	private static final Logger logger = LogManager.getLogger("ConfirmUpgradesProcessingHandler");
@@ -54,7 +62,14 @@ public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 				int productDefinitionId = attempt.getInt("productdefinitionid");
 				String productName = attempt.optString("productname", "");
 				try{
-					confirmConfigurationUpgrade(productId, productDefinitionId);
+					if(isNewDeployment(attempt.optString("manifestfile", ""))){
+						String serialNumber = attempt.optString("serialnumber", "");
+						if(serialNumber.isEmpty()) throw new IOException("no serial number was recorded for this deployment");
+						postToFactory("formName=CompleteNewDeployment&id=" + productId + "&productDefinitionid=" + productDefinitionId
+								+ "&serialNumber=" + URLEncoder.encode(serialNumber, "UTF-8"));
+					}else{
+						postToFactory("formName=ConfirmConfigurationUpgrade&id=" + productId + "&productDefinitionid=" + productDefinitionId);
+					}
 					aDBManager.markReported(attemptId);
 					confirmedCount++;
 					logger.info("Confirmed upgrade for attemptId=" + attemptId + " product=" + productName);
@@ -75,7 +90,19 @@ public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 		return toReturn;
 	}
 
-	private void confirmConfigurationUpgrade(int productId, int productDefinitionId) throws IOException{
+	private boolean isNewDeployment(String manifestFileName){
+		File manifestFile = new File(new File(Constants.PAULAUPLOADER_HOME, "deployPackages"), manifestFileName);
+		if(manifestFileName.isEmpty() || !manifestFile.isFile()) return false;
+		try{
+			JSONObject manifest = new JSONObject(FileUtils.readFileToString(manifestFile, "UTF-8"));
+			return StartDeployProcessingHandler.NEW_DEPLOYMENT_TYPE.equals(manifest.optString("deploymentType", ""));
+		}catch(Exception e){
+			logger.warn("Could not read manifest " + manifestFileName + ": " + e.getMessage());
+			return false;
+		}
+	}
+
+	private void postToFactory(String payload) throws IOException{
 		URL url = new URL(Constants.FACTORY_BASE_URL + "/FactoryServlet");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setDoInput(true);
@@ -85,7 +112,6 @@ public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 		connection.setRequestMethod("POST");
 		connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
 
-		String payload = "formName=ConfirmConfigurationUpgrade&id=" + productId + "&productDefinitionid=" + productDefinitionId;
 		try(OutputStream os = connection.getOutputStream()){
 			os.write(payload.getBytes("UTF-8"));
 		}
@@ -100,7 +126,7 @@ public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 
 		JSONObject envelope = new JSONObject(responseText.toString());
 		if(!"Success".equals(envelope.optString("Status"))){
-			throw new IOException(envelope.optString("Data", "ConfirmConfigurationUpgrade failed"));
+			throw new IOException(envelope.optString("Data", "factory server returned an error"));
 		}
 	}
 

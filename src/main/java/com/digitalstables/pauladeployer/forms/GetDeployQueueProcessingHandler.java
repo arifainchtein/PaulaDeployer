@@ -60,6 +60,8 @@ public class GetDeployQueueProcessingHandler extends ProcessingFormHandler{
 					tile.put("repoName", manifest.optString("repoName", ""));
 					tile.put("version", manifest.optInt("version"));
 					tile.put("productDefinitionLabel", manifest.optString("repoName", "") + " v" + manifest.optInt("version"));
+					// New Deployment = unit never configured yet (see StartDeployProcessingHandler.runNewDeployment)
+					tile.put("newDeployment", StartDeployProcessingHandler.NEW_DEPLOYMENT_TYPE.equals(manifest.optString("deploymentType", "")));
 
 					JSONObject latestAttempt = aDBManager.getLatestAttemptForManifest(manifestName);
 					if(latestAttempt == null){
@@ -69,6 +71,8 @@ public class GetDeployQueueProcessingHandler extends ProcessingFormHandler{
 						tile.put("lastAttemptId", latestAttempt.getInt("id"));
 						tile.put("completedOn", latestAttempt.optLong("completedon", 0)); // epoch millis - frontend shows "Updated <date>" for Success
 						tile.put("reported", latestAttempt.optBoolean("reported", false)); // frontend shows "Remove" once a Success tile is also reported
+						// the serial number a New Deployment read off the device (the manifest's is blank)
+						if(!latestAttempt.optString("serialnumber", "").isEmpty()) tile.put("serialNumber", latestAttempt.getString("serialnumber"));
 					}
 					queue.put(tile);
 				}

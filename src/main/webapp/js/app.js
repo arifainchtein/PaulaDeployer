@@ -282,6 +282,28 @@ $(function(){
 		clearInterval(nearbyTimer);
 		nearbyTimer = null;
 	});
+	$('#nearby-check-secret, #nearby-copy-secret').on('click', function(){
+		var copy = this.id === 'nearby-copy-secret';
+		if(copy && !confirm('Copy the plugged-in Daffodil\'s secret into Paula?')) return;
+		var $b = $(this).prop('disabled', true);
+		$('#nearby-secret-status').text(copy ? 'Copying...' : 'Checking...');
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: copy ? 'copySecret' : 'checkSecret'},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS){
+					$('#nearby-secret-status').html('<span class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</span>');
+					return;
+				}
+				var match = JSON.parse(result[DATA_KEY]).match;
+				$('#nearby-secret-status').html(match
+					? '<span style="color:#2e7d32">&#10003; Paula has the same secret as the plugged-in Daffodil</span>'
+					: '<span class="text-danger">&#10007; Paula\'s secret is different - press Copy secret to Paula</span>');
+			},
+			error: function(){ $('#nearby-secret-status').html('<span class="text-danger">Request failed.</span>'); },
+			complete: function(){ $b.prop('disabled', false); }
+		});
+	});
 	$('#nearby-clock').on('click', '#nearby-set-clock', function(){
 		var $b = $(this).prop('disabled', true);
 		$.ajax({
@@ -757,7 +779,8 @@ function renderQueue(queue){
 		html += '<div class="pd-tile-wrap">';
 		html += '<button type="button" class="pd-tile ' + statusClass + '" data-manifest="' + escapeHtml(tile.manifestFile) + '" data-status="' + tile.tileStatus + '">';
 		html += '<span class="pd-tile-name">' + escapeHtml(tile.productName) + '</span>';
-		html += '<span class="pd-tile-definition">' + escapeHtml(tile.productDefinitionLabel) + '</span>';
+		html += '<span class="pd-tile-definition">' + (tile.newDeployment ? 'New: ' : '') + escapeHtml(tile.productDefinitionLabel) + '</span>';
+		if(tile.newDeployment && tile.serialNumber) html += '<span class="pd-tile-serial">SN ' + escapeHtml(tile.serialNumber) + '</span>';
 		if(badge) html += '<span class="pd-tile-status-badge">' + badge + '</span>';
 		html += '</button>';
 		// Failed tiles get their own remove "x" - the footer Remove only clears confirmed successes

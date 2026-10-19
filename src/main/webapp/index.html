@@ -6,7 +6,7 @@
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.7.12">
+<link rel="stylesheet" href="css/style.css?v=0.7.13">
 </head>
 <body>
 
@@ -147,6 +147,11 @@
         <div id="nearby-clock" style="font-size:14px;margin-bottom:6px;"></div>
         <div id="nearby-status" style="font-size:14px;margin-bottom:6px;"></div>
         <div id="nearby-list"></div>
+        <h6 style="margin-top:14px;">Paula's secret</h6>
+        <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">Paula's commands carry a code made from the customer's secret. If Paula's secret is different, every command is rejected (and Paula's LEDs 2-3 stay red). Plug one of the customer's Daffodils into the Pi (jumper on USB), then check or copy. The secret is never shown.</div>
+        <button id="nearby-check-secret" type="button" class="btn btn-sm btn-outline-secondary">Check</button>
+        <button id="nearby-copy-secret" type="button" class="btn btn-sm btn-warning">Copy secret to Paula</button>
+        <div id="nearby-secret-status" style="font-size:14px;margin-top:6px;"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -297,6 +302,6 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.7.12"></script>
+<script src="js/app.js?v=0.7.13"></script>
 </body>
 </html>

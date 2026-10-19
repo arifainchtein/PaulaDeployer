@@ -14,6 +14,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
+import com.digitalstables.pauladeployer.flash.FirmwareFlasher;
 import com.digitalstables.pauladeployer.flash.PaulaRadio;
 import com.digitalstables.pauladeployer.servlet.ProcessingFormHandler;
 import com.digitalstables.pauladeployer.utils.Constants;
@@ -27,6 +28,12 @@ import com.digitalstables.pauladeployer.utils.Utils;
 //   action=list                         -> Paula's GetNearbyDevices JSON
 //   action=wifi, serial=<16 hex>, state=on|off
 //   action=setClock                     -> sets Paula's RTC from the Pi's clock
+//   action=checkSecret / copySecret     -> compares Paula's TOTP secret with the Daffodil plugged into
+//                                          the Pi, or copies that device's secret into Paula. The
+//                                          secret itself is never sent to the page. Commands carry a
+//                                          code from it - a Paula with another secret (it was never
+//                                          configured as one of the customer's devices) has every
+//                                          command rejected, and LEDs 2-3 stay red.
 // The list also carries clockOffsetSec (Paula's clock minus the Pi's) - a Daffodil rejects
 // commands whose time is more than 15 min from its own clock (2026-10-14: every Paula command was
 // rejected while Annabelle's worked).
@@ -44,6 +51,19 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 		super(req, res, servletContext);
 	}
 
+	// The line just before "Ok-GetSecret" (the firmware may print debug lines first), or null.
+	private static String secretFrom(String transcript){
+		if(transcript == null) return null;
+		String[] lines = transcript.split("\n");
+		for(int i = 1; i < lines.length; i++){
+			if(lines[i].contains("Ok-GetSecret")){
+				String s = lines[i - 1].trim();
+				return s.isEmpty() ? null : s;
+			}
+		}
+		return null;
+	}
+
 	public JSONObject process(){
 		try{
 			String action = request.getParameter("action");
@@ -59,6 +79,23 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 				}
 				logger.info("WiFi " + state + " requested for " + serial);
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", "Queued");
+			}
+			if("checkSecret".equals(action) || "copySecret".equals(action)){
+				String deviceSecret = secretFrom(new FirmwareFlasher().sendCommandToTarget("GetSecret", true));
+				if(deviceSecret == null){
+					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No Daffodil answered - plug one of your Daffodils into the Pi's USB (jumper on USB) and try again.");
+				}
+				if("copySecret".equals(action)){
+					String reply = PaulaRadio.get().command("SetSecret#" + deviceSecret + "#6#30", TIMEOUT_MILLISECONDS);
+					if(reply == null || !reply.contains("Ok-SetSecret")){
+						return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not take the secret: " + reply);
+					}
+					logger.info("Copied the plugged-in device's secret into Paula");
+				}
+				String paulaSecret = secretFrom(PaulaRadio.get().command("GetSecret", TIMEOUT_MILLISECONDS));
+				JSONObject data = new JSONObject();
+				data.put("match", deviceSecret.equals(paulaSecret));
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 			}
 			if("setClock".equals(action)){
 				String error = PaulaRadio.get().setClockNow();

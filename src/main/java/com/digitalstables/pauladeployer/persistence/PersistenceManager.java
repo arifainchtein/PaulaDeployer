@@ -110,6 +110,26 @@ public class PersistenceManager{
 		}
 	}
 
+	// "New Deployment" attempts start with no serial number - StartDeployProcessingHandler reads it
+	// off the device mid-flash and records it here, for ConfirmUpgradesProcessingHandler to send back.
+	public void updateAttemptSerialNumber(int attemptId, String serialNumber){
+		String sql = "update deployAttempt set serialnumber=? where id=?";
+		Connection connection = null;
+		PreparedStatement preparedStatement = null;
+		try{
+			connection = connectionPool.getConnection();
+			preparedStatement = connection.prepareStatement(sql);
+			preparedStatement.setString(1, serialNumber);
+			preparedStatement.setInt(2, attemptId);
+			preparedStatement.executeUpdate();
+			logger.info("deployAttempt id=" + attemptId + " serial number=" + serialNumber);
+		}catch(SQLException e){
+			logger.warn(Utils.getStringException(e));
+		}finally{
+			closeQuietly(null, preparedStatement, connection);
+		}
+	}
+
 	public void completeAttempt(int attemptId, boolean success){
 		String sql = "update deployAttempt set status=?, completedon=? where id=?";
 		Connection connection = null;
