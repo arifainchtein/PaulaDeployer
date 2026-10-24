@@ -35,6 +35,7 @@
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
     <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
+    <button id="lora-sniffer-btn" type="button" class="btn btn-warning pd-toolbar-btn">Lora Sniffer</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -78,6 +79,17 @@
   <div class="pd-terminal-buttons">
     <button id="copy-terminal-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
     <button id="return-btn" type="button" class="btn btn-secondary pd-return-btn" style="display:none;">Return to main screen</button>
+  </div>
+</div>
+
+<!-- Lora Sniffer (LoraSnifferProcessingHandler): every LoRa packet Paula hears, newest at the bottom -->
+<div id="sniffer-screen" class="pd-screen" style="display:none;">
+  <div class="pd-terminal-title">Lora Sniffer <span id="sniffer-status" class="pd-sniffer-status"></span></div>
+  <pre id="sniffer-output" class="pd-terminal"></pre>
+  <div class="pd-terminal-buttons">
+    <button id="sniffer-toggle-btn" type="button" class="btn btn-warning pd-copy-terminal-btn">Pause</button>
+    <button id="sniffer-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
+    <button id="sniffer-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
   </div>
 </div>
 

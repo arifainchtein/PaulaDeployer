@@ -3,11 +3,18 @@ package com.digitalstables.pauladeployer.flash;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedList;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.digitalstables.pauladeployer.forms.SetDeviceTimeProcessingHandler;
+import com.digitalstables.pauladeployer.utils.Constants;
 import com.digitalstables.pauladeployer.utils.Utils;
 import com.fazecast.jSerialComm.SerialPort;
 
@@ -30,6 +37,16 @@ public class PaulaRadio {
 	private SerialPort port;
 	private OutputStream output;
 	private final StringBuilder partialLine = new StringBuilder();
+
+	// LoRa Sniffer (2026-10-24): Paula's "SNIFF {...}" lines (LoraSniffer#1, see printSniff in
+	// Paula.ino), each with the Pi's time and a sequence number so the page asks only for new ones.
+	// Collected whenever the port is read - drain() and command() keep them instead of discarding.
+	private static final String SNIFF_PREFIX = "SNIFF ";
+	private static final int SNIFF_KEEP = 500;
+	private static final DateTimeFormatter HMS = DateTimeFormatter.ofPattern("HH:mm:ss");
+	private final LinkedList<JSONObject> sniffed = new LinkedList<JSONObject>();
+	private long sniffSequence = 0;
+	private boolean sniffing = false;
 
 	public static PaulaRadio get() {
 		return INSTANCE;
@@ -56,6 +73,7 @@ public class PaulaRadio {
 					Thread.sleep(50);
 					continue;
 				}
+				if (keepSniffed(line)) continue;
 				if (transcript.length() > 0) transcript.append("\n");
 				transcript.append(line);
 				if (line.startsWith("Ok-") || line.startsWith("Failure")) return transcript.toString();
@@ -87,6 +105,7 @@ public class PaulaRadio {
 		try {
 			Thread.sleep(BOOT_WAIT_MILLISECONDS);
 			setPaulaClock();
+			if (sniffing) writeSnifferCommand(true);  // opening the port reset Paula, which turned it off
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		} catch (IOException e) {
@@ -131,6 +150,66 @@ public class PaulaRadio {
 		logger.info("Set Paula's clock: " + command);
 	}
 
+	// The Lora Sniffer screen's Start / Stop. Returns null when it worked.
+	public synchronized String setSniffing(boolean on) {
+		boolean wasOpen = heldPortName() != null;
+		sniffing = on;
+		if (!ensureOpen()) return on ? "Paula not found - is it plugged in?" : null;
+		try {
+			if (wasOpen) writeSnifferCommand(on);  // a fresh open reset Paula, and ensureOpen() already sent it
+			return null;
+		} catch (IOException | InterruptedException e) {
+			close();
+			return "Could not reach Paula: " + e.getMessage();
+		}
+	}
+
+	// LoraSniffer#1/#0 - like SetTime, written without waiting for its "Ok-" (Paula reads a command
+	// after ~1 s of silence), then whatever came in meanwhile is collected.
+	private void writeSnifferCommand(boolean on) throws IOException, InterruptedException {
+		output.write(("LoraSniffer#" + (on ? 1 : 0)).getBytes(StandardCharsets.UTF_8));
+		output.flush();
+		Thread.sleep(1500);
+		drain();
+		logger.info("Lora Sniffer " + (on ? "on" : "off"));
+	}
+
+	// The packets heard after sequence number `after`: {"sequence":<last>,"sniffing":..,"packets":[..]}.
+	// A packet the page never asked for again drops off after SNIFF_KEEP.
+	public synchronized JSONObject sniffedAfter(long after) {
+		JSONObject result = new JSONObject();
+		if (sniffing && ensureOpen()) {
+			String line;
+			while ((line = nextLine()) != null) keepSniffed(line);
+		}
+		JSONArray packets = new JSONArray();
+		for (JSONObject packet : sniffed) {
+			if (packet.getLong("sequence") > after) packets.put(packet);
+		}
+		result.put("sequence", sniffSequence);
+		result.put("sniffing", sniffing);
+		result.put("connected", port != null && port.isOpen());
+		result.put("packets", packets);
+		return result;
+	}
+
+	// True when line was a sniffer line (kept).
+	private boolean keepSniffed(String line) {
+		if (!line.startsWith(SNIFF_PREFIX)) return false;
+		JSONObject packet;
+		try {
+			packet = new JSONObject(line.substring(SNIFF_PREFIX.length()));
+		} catch (Exception e) {
+			packet = new JSONObject();
+			packet.put("raw", line);  // cut short or garbled on the wire
+		}
+		packet.put("sequence", ++sniffSequence);
+		packet.put("time", LocalTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE)).format(HMS));
+		sniffed.add(packet);
+		while (sniffed.size() > SNIFF_KEEP) sniffed.removeFirst();
+		return true;
+	}
+
 	// Reads bytes straight from the port (2026-10-14): a BufferedReader's readLine() waited for the
 	// end of a line that Paula's SetTime echo never sends, hit the port's read timeout and threw -
 	// "the request timed out", and the port closed (resetting Paula). Never blocks.
@@ -149,13 +228,10 @@ public class PaulaRadio {
 		return null;
 	}
 
-	// Discards everything waiting, half lines included.
+	// Discards everything waiting, half lines included - except sniffer lines.
 	private void drain() {
-		int available;
-		while ((available = port.bytesAvailable()) > 0) {
-			byte[] junk = new byte[available];
-			if (port.readBytes(junk, available) <= 0) break;
-		}
+		String line;
+		while ((line = nextLine()) != null) keepSniffed(line);
 		partialLine.setLength(0);
 	}
 

@@ -678,6 +678,27 @@ $(function(){
 		});
 	});
 
+	// "Lora Sniffer" - see LoraSnifferProcessingHandler. Polls once a second while the screen is open.
+	$('#lora-sniffer-btn').on('click', function(){
+		$('#main-screen').hide();
+		$('#sniffer-screen').show();
+		$('#sniffer-output').text('');
+		snifferSequence = 0;
+		snifferCount = 0;
+		setSniffing(true);
+	});
+	$('#sniffer-toggle-btn').on('click', function(){
+		setSniffing(!snifferTimer);
+	});
+	$('#sniffer-copy-btn').on('click', function(){
+		copyTextToClipboard($('#sniffer-output').text(), $(this));
+	});
+	$('#sniffer-return-btn').on('click', function(){
+		if(snifferTimer) setSniffing(false);
+		$('#sniffer-screen').hide();
+		$('#main-screen').show();
+	});
+
 	$('#return-btn').on('click', function(){
 		stopPolling();
 		$('#terminal-screen').hide();
@@ -1152,4 +1173,77 @@ function showNearbyClock(listing){
 	if(listing.piNtpSynced === false) html += '<div class="text-danger">The Pi\'s clock is not internet-synced - press Set Pi Time first.</div>';
 	if(abs >= 60) html += ' <button type="button" class="btn btn-sm btn-warning" id="nearby-set-clock">Set Paula\'s clock</button>';
 	$('#nearby-clock').html(html);
+}
+
+var snifferTimer = null, snifferSequence = 0, snifferCount = 0;
+
+// Start / stop: Paula is told to print its packets (LoraSniffer#1/#0), and the page polls while on.
+function setSniffing(on){
+	if(snifferTimer){ clearInterval(snifferTimer); snifferTimer = null; }
+	$('#sniffer-toggle-btn').text(on ? 'Pause' : 'Resume');
+	$('#sniffer-status').text(on ? 'Talking to Paula...' : 'Paused');
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "LoraSniffer", action: on ? "start" : "stop"},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){
+				$('#sniffer-status').text('');
+				$('#sniffer-toggle-btn').text('Resume');
+				appendSnifferHtml('<span class="pd-sniffer-bad">' + escapeHtml(result[DATA_KEY]) + '</span>');
+				return;
+			}
+			if(!on) return;
+			snifferSequence = JSON.parse(result[DATA_KEY]).sequence;
+			showSnifferCount();
+			snifferTimer = setInterval(pollSniffer, 1000);
+		},
+		error: function(){
+			$('#sniffer-status').text('Request failed');
+			$('#sniffer-toggle-btn').text('Resume');
+		}
+	});
+}
+
+function pollSniffer(){
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "LoraSniffer", action: "poll", after: snifferSequence},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS || !snifferTimer) return;
+			var data = JSON.parse(result[DATA_KEY]);
+			if(data.sequence < snifferSequence) snifferSequence = 0;  // Tomcat restarted
+			data.packets.forEach(function(p){
+				if(p.sequence <= snifferSequence) return;
+				snifferSequence = p.sequence;
+				snifferCount++;
+				appendSnifferHtml(snifferPacketHtml(p));
+			});
+			if(!data.connected) $('#sniffer-status').text('Paula not connected - is it plugged in?');
+			else showSnifferCount();
+		}
+	});
+}
+
+function showSnifferCount(){
+	$('#sniffer-status').text(snifferCount ? snifferCount + ' packet' + (snifferCount === 1 ? '' : 's') : 'Listening...');
+}
+
+// 14:03:22 DigitalStablesData Cleotilde 28FF0A1B2C3D4E5F  RSSI -87  SNR 9.50  81 B
+function snifferPacketHtml(p){
+	if(p.raw) return escapeHtml(p.time + ' ' + p.raw);
+	var rssiClass = p.rssi < -110 ? 'pd-sniffer-weak' : (p.rssi < -95 ? 'pd-sniffer-fair' : '');
+	var line = escapeHtml(p.time) + ' ' + escapeHtml(p.type);
+	if(p.name) line += ' ' + escapeHtml(p.name);
+	if(p.serial) line += ' ' + escapeHtml(p.serial);
+	line += '  <span class="' + rssiClass + '">RSSI ' + p.rssi + '</span>  SNR ' + Number(p.snr).toFixed(1) + '  ' + p.size + ' B';
+	if(p.ok === false) line += '  <span class="pd-sniffer-bad">' + (p.type === 'WeatherForecastUpdate' ? 'BAD CODE' : 'BAD CHECKSUM') + '</span>';
+	if(p.hex) line += '\n    ' + escapeHtml(p.hex);
+	return line;
+}
+
+function appendSnifferHtml(html){
+	var el = document.getElementById('sniffer-output');
+	var wasScrolledToBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+	el.insertAdjacentHTML('beforeend', html + '\n');
+	if(wasScrolledToBottom) el.scrollTop = el.scrollHeight;
 }

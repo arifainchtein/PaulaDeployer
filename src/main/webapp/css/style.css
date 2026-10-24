@@ -289,3 +289,9 @@ html, body {
   .pd-info-btn { margin-left: 6px; }
 }
 .pd-fw-link { color: #2a670e; font-weight: 600; text-decoration: underline; }
+
+/* Lora Sniffer screen */
+.pd-sniffer-status { font-size: 13px; font-weight: 400; color: #6c757d; margin-left: 6px; }
+.pd-sniffer-weak { color: #f87171; }
+.pd-sniffer-fair { color: #facc15; }
+.pd-sniffer-bad  { color: #f87171; font-weight: 700; }
