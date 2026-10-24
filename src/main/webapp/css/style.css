@@ -299,3 +299,4 @@ html, body {
 #sniffer-output { height: calc(100vh - 420px); height: calc(100dvh - 420px); min-height: 160px; }
 .pd-sniffer-summary { max-height: 150px; overflow-y: auto; margin-bottom: 14px; font-size: 14px; }
 .pd-sniffer-summary th { position: sticky; top: 0; background: #fff; }
+.pd-sniffer-capture { font-size: 13px; color: #6c757d; margin: -8px 0 8px 0; word-break: break-all; }

@@ -687,16 +687,17 @@ $(function(){
 		snifferCount = 0;
 		snifferSummary = {};
 		renderSnifferSummary();
-		setSniffing(true);
+		$('#sniffer-capture').text('');
+		setSniffing(true, true);
 	});
 	$('#sniffer-toggle-btn').on('click', function(){
-		setSniffing(!snifferTimer);
+		setSniffing(!snifferTimer, false);
 	});
 	$('#sniffer-copy-btn').on('click', function(){
 		copyTextToClipboard($('#sniffer-output').text() + '\n' + snifferSummaryText(), $(this));
 	});
 	$('#sniffer-return-btn').on('click', function(){
-		if(snifferTimer) setSniffing(false);
+		setSniffing(false, true);  // ends the capture file, paused or not
 		$('#sniffer-screen').hide();
 		$('#main-screen').show();
 	});
@@ -1178,17 +1179,17 @@ function showNearbyClock(listing){
 }
 
 var snifferTimer = null, snifferSequence = 0, snifferCount = 0;
-// snifferSummary: name -> {count, last}; snifferNames: serial -> name, for VitalSigns packets,
-// which carry only the serial - they count under the name the device's data packets gave.
-var snifferSummary = {}, snifferNames = {};
+// snifferSummary: label -> {count, last} (the label - device name or kind of packet - comes from PaulaRadio.labelOf)
+var snifferSummary = {};
 
 // Start / stop: Paula is told to print its packets (LoraSniffer#1/#0), and the page polls while on.
-function setSniffing(on){
+// session: opening / leaving the screen - the Pi starts / ends the capture file (not Pause/Resume).
+function setSniffing(on, session){
 	if(snifferTimer){ clearInterval(snifferTimer); snifferTimer = null; }
 	$('#sniffer-toggle-btn').text(on ? 'Pause' : 'Resume');
 	$('#sniffer-status').text(on ? 'Talking to Paula...' : 'Paused');
 	$.ajax({
-		type: "POST", url: "PaulaDeployerServlet", data: {formName: "LoraSniffer", action: on ? "start" : "stop"},
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "LoraSniffer", action: on ? "start" : "stop", session: session},
 		success: function(raw){
 			var result = JSON.parse(raw);
 			if(result[STATUS_KEY] !== STATUS_SUCCESS){
@@ -1198,7 +1199,9 @@ function setSniffing(on){
 				return;
 			}
 			if(!on) return;
-			snifferSequence = JSON.parse(result[DATA_KEY]).sequence;
+			var started = JSON.parse(result[DATA_KEY]);
+			snifferSequence = started.sequence;
+			showSnifferCapture(started.capture);
 			showSnifferCount();
 			snifferTimer = setInterval(pollSniffer, 1000);
 		},
@@ -1222,7 +1225,7 @@ function pollSniffer(){
 				snifferSequence = p.sequence;
 				snifferCount++;
 				appendSnifferHtml(snifferPacketHtml(p));
-				var name = snifferPacketName(p), entry = snifferSummary[name] || (snifferSummary[name] = {count: 0});
+				var entry = snifferSummary[p.label] || (snifferSummary[p.label] = {count: 0});
 				entry.count++;
 				entry.last = p.time;
 			});
@@ -1237,26 +1240,20 @@ function showSnifferCount(){
 	$('#sniffer-status').text(snifferCount ? snifferCount + ' packet' + (snifferCount === 1 ? '' : 's') : 'Listening...');
 }
 
-// The device's name, or what kind of packet it was when the packet carries no name.
-function snifferPacketName(p){
-	if(p.raw) return 'Garbled';
-	if(p.name){
-		if(p.serial) snifferNames[p.serial] = p.name;
-		return p.name;
-	}
-	if(p.serial && snifferNames[p.serial]) return snifferNames[p.serial];
-	if(p.type === 'WeatherForecastUpdate') return 'Weather forecast';
-	if(p.type === 'VitalSignsRecord' || p.type === 'VitalSignsRecordV3') return 'Vital signs ' + (p.serial || '');
-	return p.type;
+// Where this session is being saved (FieldCaptures), linked so it can be opened from the phone.
+function showSnifferCapture(capture){
+	if(!capture){ $('#sniffer-capture').text('Not being saved - see the Pi\'s log'); return; }
+	$('#sniffer-capture').html('Saving to <a href="captures/' + escapeHtml(capture) + '" target="_blank">captures/' + escapeHtml(capture) + '</a>'
+		+ ' &middot; <a href="captures/" target="_blank">all captures</a>');
 }
 
-// 14:03:22 Cleotilde  R -87  S 9.5  (R = RSSI, S = SNR - short so a line fits a phone)
+// 14:03:22 Cleotilde R -87 S 9.5  (R = RSSI, S = SNR, single spaces - short so a line fits a phone)
 function snifferPacketHtml(p){
 	if(p.raw) return escapeHtml(p.time + ' ' + p.raw);
 	var rssiClass = p.rssi < -110 ? 'pd-sniffer-weak' : (p.rssi < -95 ? 'pd-sniffer-fair' : '');
-	var line = escapeHtml(p.time) + ' ' + escapeHtml(snifferPacketName(p));
-	line += '  <span class="' + rssiClass + '">R ' + p.rssi + '</span>  S ' + Number(p.snr).toFixed(1);
-	if(p.ok === false) line += '  <span class="pd-sniffer-bad">' + (p.type === 'WeatherForecastUpdate' ? 'BAD CODE' : 'BAD CHECKSUM') + '</span>';
+	var line = escapeHtml(p.time) + ' ' + escapeHtml(p.label);
+	line += ' <span class="' + rssiClass + '">R ' + p.rssi + '</span> S ' + Number(p.snr).toFixed(1);
+	if(p.ok === false) line += ' <span class="pd-sniffer-bad">' + (p.type === 'WeatherForecastUpdate' ? 'BAD CODE' : 'BAD CHECKSUM') + '</span>';
 	if(p.hex) line += '\n    ' + p.size + ' B: ' + escapeHtml(p.hex);
 	return line;
 }

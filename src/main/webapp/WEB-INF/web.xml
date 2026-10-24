@@ -29,6 +29,16 @@
     <url-pattern>/streamlogs/*</url-pattern>
   </servlet-mapping>
 
+  <!-- Field captures (2026-10-24): /captures/ lists them, /captures/<kind>/<name>.txt is one -->
+  <servlet>
+    <servlet-name>CaptureServlet</servlet-name>
+    <servlet-class>com.digitalstables.pauladeployer.servlet.CaptureServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>CaptureServlet</servlet-name>
+    <url-pattern>/captures/*</url-pattern>
+  </servlet-mapping>
+
   <welcome-file-list>
     <welcome-file>index.html</welcome-file>
   </welcome-file-list>

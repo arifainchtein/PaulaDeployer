@@ -1,12 +1,19 @@
 package com.digitalstables.pauladeployer.flash;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -15,6 +22,7 @@ import org.json.JSONObject;
 
 import com.digitalstables.pauladeployer.forms.SetDeviceTimeProcessingHandler;
 import com.digitalstables.pauladeployer.utils.Constants;
+import com.digitalstables.pauladeployer.utils.FieldCaptures;
 import com.digitalstables.pauladeployer.utils.Utils;
 import com.fazecast.jSerialComm.SerialPort;
 
@@ -47,6 +55,14 @@ public class PaulaRadio {
 	private final LinkedList<JSONObject> sniffed = new LinkedList<JSONObject>();
 	private long sniffSequence = 0;
 	private boolean sniffing = false;
+	// The session's capture file (FieldCaptures, kind lorasniffer) - from opening the Lora Sniffer
+	// screen to leaving it, Pause/Resume included - and its summary, written at the end:
+	// label -> {count, last time}. namesBySerial: VitalSigns packets carry only the serial, so they
+	// count under the name that device's data packets gave.
+	private BufferedWriter capture;
+	private String captureName;
+	private final Map<String, Object[]> summary = new TreeMap<String, Object[]>();
+	private final Map<String, String> namesBySerial = new HashMap<String, String>();
 
 	public static PaulaRadio get() {
 		return INSTANCE;
@@ -150,8 +166,12 @@ public class PaulaRadio {
 		logger.info("Set Paula's clock: " + command);
 	}
 
-	// The Lora Sniffer screen's Start / Stop. Returns null when it worked.
-	public synchronized String setSniffing(boolean on) {
+	// The Lora Sniffer screen's Start / Stop. session: on start, begin a new capture file (the screen
+	// was just opened, not Resume); on stop, end it (the screen was left, not Pause). Returns null
+	// when it worked.
+	public synchronized String setSniffing(boolean on, boolean session) {
+		if (session && on) startCapture();
+		if (session && !on) endCapture();
 		boolean wasOpen = heldPortName() != null;
 		sniffing = on;
 		if (!ensureOpen()) return on ? "Paula not found - is it plugged in?" : null;
@@ -189,6 +209,7 @@ public class PaulaRadio {
 		result.put("sequence", sniffSequence);
 		result.put("sniffing", sniffing);
 		result.put("connected", port != null && port.isOpen());
+		if (captureName != null) result.put("capture", captureName);
 		result.put("packets", packets);
 		return result;
 	}
@@ -204,10 +225,88 @@ public class PaulaRadio {
 			packet.put("raw", line);  // cut short or garbled on the wire
 		}
 		packet.put("sequence", ++sniffSequence);
-		packet.put("time", LocalTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE)).format(HMS));
+		String time = LocalTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE)).format(HMS);
+		packet.put("time", time);
+		String label = labelOf(packet);
+		packet.put("label", label);
 		sniffed.add(packet);
 		while (sniffed.size() > SNIFF_KEEP) sniffed.removeFirst();
+		Object[] entry = summary.get(label);
+		if (entry == null) summary.put(label, entry = new Object[] { 0, null });
+		entry[0] = (Integer) entry[0] + 1;
+		entry[1] = time;
+		writeCapture(captureLine(packet));
 		return true;
+	}
+
+	// What the screen and the summary call the packet: the device's name, or the kind of packet.
+	private String labelOf(JSONObject p) {
+		if (p.has("raw")) return "Garbled";
+		String serial = p.optString("serial", null);
+		String name = p.optString("name", "");
+		if (!name.isEmpty()) {
+			if (serial != null) namesBySerial.put(serial, name);
+			return name;
+		}
+		if (serial != null && namesBySerial.containsKey(serial)) return namesBySerial.get(serial);
+		String type = p.optString("type");
+		if ("WeatherForecastUpdate".equals(type)) return "Weather forecast";
+		if (type.startsWith("VitalSignsRecord")) return "Vital signs " + (serial == null ? "" : serial);
+		return type;
+	}
+
+	// The same line the screen shows: 14:03:22 Cleotilde R -87 S -10.8
+	private static String captureLine(JSONObject p) {
+		if (p.has("raw")) return p.getString("time") + " " + p.getString("raw");
+		String line = p.getString("time") + " " + p.getString("label") + " R " + p.optInt("rssi") + " S "
+				+ String.format("%.1f", p.optDouble("snr"));
+		if (p.has("ok") && !p.getBoolean("ok")) line += "WeatherForecastUpdate".equals(p.optString("type")) ? " BAD CODE" : " BAD CHECKSUM";
+		if (p.has("hex")) line += "\n    " + p.optInt("size") + " B: " + p.getString("hex");
+		return line;
+	}
+
+	private void startCapture() {
+		endCapture();
+		try {
+			File f = FieldCaptures.newFile(FieldCaptures.KIND_LORA_SNIFFER, null);
+			capture = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8));
+			captureName = FieldCaptures.KIND_LORA_SNIFFER + "/" + f.getName();
+			writeCapture("# Lora Sniffer, started " + FieldCaptures.format("yyyy-MM-dd HH:mm:ss z") + " (R = RSSI, S = SNR)");
+		} catch (IOException e) {
+			logger.warn("Could not create the Lora Sniffer capture: " + e.getMessage());
+			capture = null;
+			captureName = null;
+		}
+	}
+
+	// The summary goes at the end of the file, then it's closed.
+	private void endCapture() {
+		if (capture != null) {
+			writeCapture("# Ended " + FieldCaptures.format("yyyy-MM-dd HH:mm:ss z"));
+			writeCapture("# Summary:");
+			for (Map.Entry<String, Object[]> e : summary.entrySet()) {
+				writeCapture("# " + e.getKey() + " " + e.getValue()[0] + " received, last " + e.getValue()[1]);
+			}
+			try { capture.close(); } catch (IOException e) { /* ignore */ }
+		}
+		capture = null;
+		captureName = null;
+		summary.clear();
+		namesBySerial.clear();
+	}
+
+	// Flushed per line, so a pulled plug still leaves everything up to then.
+	private void writeCapture(String line) {
+		if (capture == null) return;
+		try {
+			capture.write(line);
+			capture.newLine();
+			capture.flush();
+		} catch (IOException e) {
+			logger.warn("Lora Sniffer capture write failed: " + e.getMessage());
+			try { capture.close(); } catch (IOException e2) { /* ignore */ }
+			capture = null;
+		}
 	}
 
 	// Reads bytes straight from the port (2026-10-14): a BufferedReader's readLine() waited for the

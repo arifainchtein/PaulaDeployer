@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import com.digitalstables.pauladeployer.utils.FieldCaptures;
 import com.digitalstables.pauladeployer.utils.Utils;
 
 // The same local Postgres PaulaUploader's DeploymentStore already uses on this Pi (paulauploader
@@ -147,6 +148,8 @@ public class PersistenceManager{
 		}finally{
 			closeQuietly(null, preparedStatement, connection);
 		}
+		// Every deploy ends here, so this is where its log becomes a field capture.
+		FieldCaptures.saveFirmwareUpload(getAttempt(attemptId));
 	}
 
 	public JSONObject getAttempt(int attemptId){
