@@ -685,13 +685,15 @@ $(function(){
 		$('#sniffer-output').text('');
 		snifferSequence = 0;
 		snifferCount = 0;
+		snifferSummary = {};
+		renderSnifferSummary();
 		setSniffing(true);
 	});
 	$('#sniffer-toggle-btn').on('click', function(){
 		setSniffing(!snifferTimer);
 	});
 	$('#sniffer-copy-btn').on('click', function(){
-		copyTextToClipboard($('#sniffer-output').text(), $(this));
+		copyTextToClipboard($('#sniffer-output').text() + '\n' + snifferSummaryText(), $(this));
 	});
 	$('#sniffer-return-btn').on('click', function(){
 		if(snifferTimer) setSniffing(false);
@@ -1176,6 +1178,9 @@ function showNearbyClock(listing){
 }
 
 var snifferTimer = null, snifferSequence = 0, snifferCount = 0;
+// snifferSummary: name -> {count, last}; snifferNames: serial -> name, for VitalSigns packets,
+// which carry only the serial - they count under the name the device's data packets gave.
+var snifferSummary = {}, snifferNames = {};
 
 // Start / stop: Paula is told to print its packets (LoraSniffer#1/#0), and the page polls while on.
 function setSniffing(on){
@@ -1217,7 +1222,11 @@ function pollSniffer(){
 				snifferSequence = p.sequence;
 				snifferCount++;
 				appendSnifferHtml(snifferPacketHtml(p));
+				var name = snifferPacketName(p), entry = snifferSummary[name] || (snifferSummary[name] = {count: 0});
+				entry.count++;
+				entry.last = p.time;
 			});
+			if(data.packets.length) renderSnifferSummary();
 			if(!data.connected) $('#sniffer-status').text('Paula not connected - is it plugged in?');
 			else showSnifferCount();
 		}
@@ -1228,17 +1237,50 @@ function showSnifferCount(){
 	$('#sniffer-status').text(snifferCount ? snifferCount + ' packet' + (snifferCount === 1 ? '' : 's') : 'Listening...');
 }
 
-// 14:03:22 DigitalStablesData Cleotilde 28FF0A1B2C3D4E5F  RSSI -87  SNR 9.50  81 B
+// The device's name, or what kind of packet it was when the packet carries no name.
+function snifferPacketName(p){
+	if(p.raw) return 'Garbled';
+	if(p.name){
+		if(p.serial) snifferNames[p.serial] = p.name;
+		return p.name;
+	}
+	if(p.serial && snifferNames[p.serial]) return snifferNames[p.serial];
+	if(p.type === 'WeatherForecastUpdate') return 'Weather forecast';
+	if(p.type === 'VitalSignsRecord' || p.type === 'VitalSignsRecordV3') return 'Vital signs ' + (p.serial || '');
+	return p.type;
+}
+
+// 14:03:22 Cleotilde  RSSI -87  SNR 9.5
 function snifferPacketHtml(p){
 	if(p.raw) return escapeHtml(p.time + ' ' + p.raw);
 	var rssiClass = p.rssi < -110 ? 'pd-sniffer-weak' : (p.rssi < -95 ? 'pd-sniffer-fair' : '');
-	var line = escapeHtml(p.time) + ' ' + escapeHtml(p.type);
-	if(p.name) line += ' ' + escapeHtml(p.name);
-	if(p.serial) line += ' ' + escapeHtml(p.serial);
-	line += '  <span class="' + rssiClass + '">RSSI ' + p.rssi + '</span>  SNR ' + Number(p.snr).toFixed(1) + '  ' + p.size + ' B';
+	var line = escapeHtml(p.time) + ' ' + escapeHtml(snifferPacketName(p));
+	line += '  <span class="' + rssiClass + '">RSSI ' + p.rssi + '</span>  SNR ' + Number(p.snr).toFixed(1);
 	if(p.ok === false) line += '  <span class="pd-sniffer-bad">' + (p.type === 'WeatherForecastUpdate' ? 'BAD CODE' : 'BAD CHECKSUM') + '</span>';
-	if(p.hex) line += '\n    ' + escapeHtml(p.hex);
+	if(p.hex) line += '\n    ' + p.size + ' B: ' + escapeHtml(p.hex);
 	return line;
+}
+
+// The summary as plain text, for Copy: "Cleotilde  12 received, last 14:03:22"
+function snifferSummaryText(){
+	var names = Object.keys(snifferSummary).sort();
+	if(!names.length) return 'Summary: nothing heard yet';
+	return 'Summary:\n' + names.map(function(name){
+		var e = snifferSummary[name];
+		return name + '  ' + e.count + ' received, last ' + e.last;
+	}).join('\n');
+}
+
+function renderSnifferSummary(){
+	var names = Object.keys(snifferSummary).sort();
+	if(!names.length){
+		$('#sniffer-summary-body').html('<tr><td colspan="3" class="text-muted">Nothing heard yet</td></tr>');
+		return;
+	}
+	$('#sniffer-summary-body').html(names.map(function(name){
+		var e = snifferSummary[name];
+		return '<tr><td>' + escapeHtml(name) + '</td><td class="text-end">' + e.count + '</td><td class="text-end">' + escapeHtml(e.last) + '</td></tr>';
+	}).join(''));
 }
 
 function appendSnifferHtml(html){

@@ -295,3 +295,7 @@ html, body {
 .pd-sniffer-weak { color: #f87171; }
 .pd-sniffer-fair { color: #facc15; }
 .pd-sniffer-bad  { color: #f87171; font-weight: 700; }
+/* The sniffer's terminal is shorter than the flash terminal's, to leave room for the summary. */
+#sniffer-output { height: calc(100vh - 420px); height: calc(100dvh - 420px); min-height: 160px; }
+.pd-sniffer-summary { max-height: 150px; overflow-y: auto; margin-bottom: 14px; font-size: 14px; }
+.pd-sniffer-summary th { position: sticky; top: 0; background: #fff; }

@@ -28,6 +28,7 @@
     <button id="send-command-btn" type="button" class="btn btn-info pd-toolbar-btn">Send Command</button>
     <button id="stream-chat-btn" type="button" class="btn btn-info pd-toolbar-btn">Stream 2 Chat</button>
     <button id="nearby-btn" type="button" class="btn btn-info pd-toolbar-btn">Nearby Devices</button>
+    <button id="lora-sniffer-btn" type="button" class="btn btn-info pd-toolbar-btn">Lora Sniffer</button>
     <button id="calibrate-csw-btn" type="button" class="btn btn-warning pd-toolbar-btn">Calibrate CSW</button>
     <button id="test-flow-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Flow Sensor</button>
     <button id="test-ultrasonic-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Ultrasonic</button>
@@ -35,7 +36,6 @@
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
     <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
-    <button id="lora-sniffer-btn" type="button" class="btn btn-warning pd-toolbar-btn">Lora Sniffer</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
     <div class="pd-empty-message">Loading deploy queue...</div>
@@ -86,8 +86,15 @@
 <div id="sniffer-screen" class="pd-screen" style="display:none;">
   <div class="pd-terminal-title">Lora Sniffer <span id="sniffer-status" class="pd-sniffer-status"></span></div>
   <pre id="sniffer-output" class="pd-terminal"></pre>
+  <!-- Summary: one row per device heard - how many packets and when the last one came -->
+  <div class="pd-sniffer-summary">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Device</th><th class="text-end">Received</th><th class="text-end">Last</th></tr></thead>
+      <tbody id="sniffer-summary-body"><tr><td colspan="3" class="text-muted">Nothing heard yet</td></tr></tbody>
+    </table>
+  </div>
   <div class="pd-terminal-buttons">
-    <button id="sniffer-toggle-btn" type="button" class="btn btn-warning pd-copy-terminal-btn">Pause</button>
+    <button id="sniffer-toggle-btn" type="button" class="btn btn-info pd-copy-terminal-btn">Pause</button>
     <button id="sniffer-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
     <button id="sniffer-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
   </div>
