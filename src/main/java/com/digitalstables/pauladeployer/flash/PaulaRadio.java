@@ -255,10 +255,10 @@ public class PaulaRadio {
 		return type;
 	}
 
-	// The same line the screen shows: 14:03:22 Cleotilde R -87 S -10.8
+	// The same line the screen shows: 14:03:22 Cleotilde R -87 s -10.8
 	private static String captureLine(JSONObject p) {
 		if (p.has("raw")) return p.getString("time") + " " + p.getString("raw");
-		String line = p.getString("time") + " " + p.getString("label") + " R " + p.optInt("rssi") + " S "
+		String line = p.getString("time") + " " + p.getString("label") + " R " + p.optInt("rssi") + " s "
 				+ String.format("%.1f", p.optDouble("snr"));
 		if (p.has("ok") && !p.getBoolean("ok")) line += "WeatherForecastUpdate".equals(p.optString("type")) ? " BAD CODE" : " BAD CHECKSUM";
 		if (p.has("hex")) line += "\n    " + p.optInt("size") + " B: " + p.getString("hex");
@@ -271,7 +271,7 @@ public class PaulaRadio {
 			File f = FieldCaptures.newFile(FieldCaptures.KIND_LORA_SNIFFER, null);
 			capture = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8));
 			captureName = FieldCaptures.KIND_LORA_SNIFFER + "/" + f.getName();
-			writeCapture("# Lora Sniffer, started " + FieldCaptures.format("yyyy-MM-dd HH:mm:ss z") + " (R = RSSI, S = SNR)");
+			writeCapture("# Lora Sniffer, started " + FieldCaptures.format("yyyy-MM-dd HH:mm:ss z") + " (R = RSSI, s = SNR)");
 		} catch (IOException e) {
 			logger.warn("Could not create the Lora Sniffer capture: " + e.getMessage());
 			capture = null;

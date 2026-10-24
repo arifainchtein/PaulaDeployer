@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,17 +23,13 @@ public class PaulaSerialLink {
 
 	private static final Logger logger = LogManager.getLogger("PaulaSerialLink");
 
+	private static final int WALLY_VENDOR_ID = 0x10C4;
+	private static final int WALLY_PRODUCT_ID = 0xEA60;
+
 	private static final int DATA_RATE = 115200;
 	private static final int READ_TIMEOUT_MILLISECONDS = 500;
 	private static final int MAX_WAIT_MILLISECONDS = 30000;
 	private static final int PROBE_TIMEOUT_MILLISECONDS = 3000;
-
-	// 2026-10-24: Paula used to be looked for only among CP2104 ports (VID/PID below), and was "not
-	// found" once the Pi started giving the target ESP32 ttyUSB2. Now every port is probed, in this
-	// order: the one Paula last answered on, ttyUSB0..ttyUSB5, then any other ttyUSB/ttyACM.
-	private static final int MAX_NUMBERED_PORT = 5;
-	private static final int PROBE_RETRY_MILLISECONDS = 2000;  // Paula may be booting when the port opens
-	private static volatile String lastPaulaPortName;
 
 	private SerialPort cachedWallyPort;
 
@@ -47,78 +42,27 @@ public class PaulaSerialLink {
 				if (port.getSystemPortName().equals(held)) return port;
 			}
 		}
-		List<SerialPort> candidates = probeOrder(SerialPort.getCommPorts());
-		StringBuilder tried = new StringBuilder();
+		List<SerialPort> candidates = new ArrayList<SerialPort>();
+		for (SerialPort port : SerialPort.getCommPorts()) {
+			if (port.getVendorID() == WALLY_VENDOR_ID && port.getProductID() == WALLY_PRODUCT_ID) {
+				candidates.add(port);
+			}
+		}
 		for (SerialPort candidate : candidates) {
 			if (probeForPaula(candidate)) {
-				logger.info("Found Paula on " + candidate.getSystemPortName());
-				lastPaulaPortName = candidate.getSystemPortName();
+				logger.debug("Resolved Wally on " + candidate.getSystemPortName());
 				return candidate;
 			}
-			if (tried.length() > 0) tried.append(", ");
-			tried.append(candidate.getSystemPortName());
 		}
-		logger.warn("Paula did not answer on any port (tried " + (tried.length() == 0 ? "none - no ttyUSB/ttyACM ports" : tried) + ")");
+		logger.debug("No CP2104 candidate answered as Wally (" + candidates.size() + " candidate(s) probed)");
 		return null;
 	}
 
-	// Last Paula port first, then ttyUSB0..ttyUSB<MAX_NUMBERED_PORT>, then the other ttyUSB/ttyACM
-	// ports. Not filtered by VID/PID (CP2104, 10C4:EA60, as before): the target can be a CP2104 too,
-	// and Paula's own chip may not be.
-	private static List<SerialPort> probeOrder(SerialPort[] ports) {
-		List<SerialPort> ordered = new ArrayList<SerialPort>();
-		String last = lastPaulaPortName;
-		if (last != null) addPort(ordered, ports, last);
-		for (int i = 0; i <= MAX_NUMBERED_PORT; i++) addPort(ordered, ports, "ttyUSB" + i);
-		for (SerialPort port : ports) {
-			String name = port.getSystemPortName();
-			if ((name.startsWith("ttyUSB") || name.startsWith("ttyACM")) && !ordered.contains(port)) ordered.add(port);
-		}
-		return ordered;
-	}
-
-	private static void addPort(List<SerialPort> ordered, SerialPort[] ports, String name) {
-		for (SerialPort port : ports) {
-			if (port.getSystemPortName().equals(name) && !ordered.contains(port)) ordered.add(port);
-		}
-	}
-
-	// Paula.ino answers "Sleep=<n>" then "Ok-GetSwitchState" since its switch was removed - the old
-	// Left=/Right= check never matched again. Asked a second time on the same open port when the
-	// first gets no answer: opening it can reset Paula, and the first one then arrives while it
-	// boots (reopening would just reset it again).
 	private static boolean probeForPaula(SerialPort port) {
-		port.setComPortParameters(DATA_RATE, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
-		port.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
-		if (!port.openPort()) {
-			logger.debug("Cannot open " + port.getSystemPortName() + " to look for Paula (in use?)");
-			return false;
-		}
-		try {
-			for (int attempt = 1; attempt <= 2; attempt++) {
-				if (attempt == 2) Thread.sleep(PROBE_RETRY_MILLISECONDS);
-				byte[] command = "GetSwitchState".getBytes(StandardCharsets.UTF_8);
-				port.writeBytes(command, command.length);
-				StringBuilder heard = new StringBuilder();
-				long deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MILLISECONDS;
-				while (System.currentTimeMillis() < deadline) {
-					int available = port.bytesAvailable();
-					if (available > 0) {
-						byte[] buffer = new byte[available];
-						int read = port.readBytes(buffer, available);
-						if (read > 0) heard.append(new String(buffer, 0, read, StandardCharsets.ISO_8859_1));
-						if (heard.indexOf("Ok-GetSwitchState") >= 0) return true;
-					}
-					Thread.sleep(50);
-				}
-			}
-			return false;
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			return false;
-		} finally {
-			port.closePort();
-		}
+		String response = sendCommandOnPort(port, "GetSwitchState", PROBE_TIMEOUT_MILLISECONDS);
+		// Paula.ino answers "Sleep=<n>" then "Ok-GetSwitchState" since its switch was removed - the
+		// old Left=/Right= check never matched again, so findWallyPort() always returned null.
+		return response != null && response.contains("Ok-GetSwitchState");
 	}
 
 	public String setStatusText(String text) {

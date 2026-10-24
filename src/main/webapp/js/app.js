@@ -1247,12 +1247,12 @@ function showSnifferCapture(capture){
 		+ ' &middot; <a href="captures/" target="_blank">all captures</a>');
 }
 
-// 14:03:22 Cleotilde R -87 S 9.5  (R = RSSI, S = SNR, single spaces - short so a line fits a phone)
+// 14:03:22 Cleotilde R -87 s 9.5  (R = RSSI, s = SNR, single spaces - short so a line fits a phone)
 function snifferPacketHtml(p){
 	if(p.raw) return escapeHtml(p.time + ' ' + p.raw);
 	var rssiClass = p.rssi < -110 ? 'pd-sniffer-weak' : (p.rssi < -95 ? 'pd-sniffer-fair' : '');
 	var line = escapeHtml(p.time) + ' ' + escapeHtml(p.label);
-	line += ' <span class="' + rssiClass + '">R ' + p.rssi + '</span> S ' + Number(p.snr).toFixed(1);
+	line += ' <span class="' + rssiClass + '">R ' + p.rssi + '</span> s ' + Number(p.snr).toFixed(1);
 	if(p.ok === false) line += ' <span class="pd-sniffer-bad">' + (p.type === 'WeatherForecastUpdate' ? 'BAD CODE' : 'BAD CHECKSUM') + '</span>';
 	if(p.hex) line += '\n    ' + p.size + ' B: ' + escapeHtml(p.hex);
 	return line;
