@@ -48,6 +48,12 @@ html, body {
 .pd-info-ips .pd-ip-line { display: block; }
 .pd-info-ips .pd-ip-iface { color: #1f5f02; font-weight: 600; margin-right: 8px; }
 .pd-info-version { color: #6c757d; font-size: 14px; }
+.pd-info-wifi { font-size: 15px; line-height: 1.5; margin-bottom: 12px; }
+.pd-info-wifi .pd-wifi-line { display: block; }
+.pd-info-wifi .pd-ip-iface { color: #1f5f02; font-weight: 600; margin-right: 8px; }
+.pd-info-wifi .pd-wifi-signal { color: #6c757d; font-size: 13px; }
+.pd-info-wifi .pd-wifi-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pd-info-wifi .pd-wifi-message { color: #6c757d; font-size: 13px; margin-top: 6px; }
 
 .pd-header-logo { height: 60px; width: auto; flex-shrink: 0; margin-right: 12px; }
 

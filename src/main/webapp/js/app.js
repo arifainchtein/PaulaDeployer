@@ -105,7 +105,18 @@ $(function(){
 	$('#info-btn').on('click', function(){
 		$('#info-ips').html(lastHeaderIpsHtml || 'No wlan interfaces found');
 		$('#info-body').text(lastHeaderVersion || 'Unknown');
+		loadWifi({});
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('info-modal')).show();
+	});
+
+	// Wi-Fi panel: pin wlan1 to one saved network, or back to Automatic (WifiNetworkProcessingHandler).
+	$('#info-wifi').on('click', '.pd-wifi-select-btn', function(){
+		var ssid = $(this).data('ssid');
+		if(!confirm('Switch Paula to ' + ssid + '? If your phone reaches Paula over Wi-Fi other than Paula\'s own hotspot, this page may lose Paula for a moment.')) return;
+		loadWifi({action: 'select', id: $(this).data('id')}, true);
+	});
+	$('#info-wifi').on('click', '.pd-wifi-auto-btn', function(){
+		loadWifi({action: 'auto'}, true);
 	});
 
 	// Clean shutdown for the field - a low-battery Pi with no monitor/keyboard nearby should be
@@ -739,6 +750,68 @@ function loadHeaderInfo(){
 			$('#confirm-upgrades-btn').toggle(hasWlan1);
 		}
 	});
+}
+
+// Fills the (i) popup's Wi-Fi panel. After a button, refreshes every 5 s for 45 s: joining a network,
+// the DHCP renew and the tunnel switch (factory-tunnel.timer, every 15 s) take a while to show.
+var wifiRefreshTimer = null;
+function loadWifi(params, followUp){
+	if(followUp){
+		clearInterval(wifiRefreshTimer);
+		var refreshes = 0;
+		wifiRefreshTimer = setInterval(function(){
+			if(++refreshes > 9 || !$('#info-modal').hasClass('show')){ clearInterval(wifiRefreshTimer); return; }
+			loadWifi({});
+		}, 5000);
+	}
+	$.ajax({
+		type: "POST",
+		url: "PaulaDeployerServlet",
+		data: $.extend({formName: "WifiNetwork"}, params),
+		timeout: 10000,
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){
+				$('#info-wifi').html('<span class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</span>');
+				return;
+			}
+			renderWifi(JSON.parse(result[DATA_KEY]));
+		},
+		error: function(){
+			$('#info-wifi').html('<span class="text-muted">Wi-Fi: no answer (Paula may be switching networks)</span>');
+		}
+	});
+}
+
+function renderWifi(data){
+	var html = '<div class="pd-wifi-line"><span class="pd-ip-iface">Wi-Fi</span>';
+	if(data.connected){
+		html += escapeHtml(data.ssid);
+		if(data.rssi !== undefined) html += ' <span class="pd-wifi-signal">' + data.rssi + ' dBm (' + wifiSignalWord(data.rssi) + ')</span>';
+	}else{
+		html += '<span class="text-muted">not connected (' + escapeHtml(data.state) + ')</span>';
+	}
+	html += '</div>';
+	html += '<div class="pd-wifi-line"><span class="pd-ip-iface">Tunnel</span>'
+		+ (data.tunnelUp ? 'Factory tunnel up (chat goes home through WireGuard)' : 'off (on the home Wi-Fi, chat goes straight to FACTORY2)') + '</div>';
+	html += '<div class="pd-wifi-line"><span class="pd-ip-iface">Mode</span>'
+		+ (data.selectedNetworkId < 0 ? 'Automatic' : 'pinned to one network') + '</div>';
+	html += '<div class="pd-wifi-buttons">';
+	$.each(data.networks, function(i, n){
+		var pinned = data.selectedNetworkId === n.id;
+		html += '<button type="button" class="btn btn-sm ' + (pinned ? 'btn-success' : 'btn-outline-success') + ' pd-wifi-select-btn" data-id="' + n.id + '" data-ssid="' + escapeHtml(n.ssid) + '">Use ' + escapeHtml(n.ssid) + '</button>';
+	});
+	html += '<button type="button" class="btn btn-sm ' + (data.selectedNetworkId < 0 ? 'btn-success' : 'btn-outline-success') + ' pd-wifi-auto-btn">Automatic</button>';
+	html += '</div>';
+	if(data.message) html += '<div class="pd-wifi-message">' + escapeHtml(data.message) + '</div>';
+	$('#info-wifi').html(html);
+}
+
+function wifiSignalWord(rssi){
+	if(rssi >= -60) return 'good';
+	if(rssi >= -70) return 'fair';
+	if(rssi >= -80) return 'weak';
+	return 'very weak';
 }
 
 function updatePiClock(data){
