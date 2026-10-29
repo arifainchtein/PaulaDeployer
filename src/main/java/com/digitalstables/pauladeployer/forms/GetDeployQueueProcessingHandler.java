@@ -60,6 +60,11 @@ public class GetDeployQueueProcessingHandler extends ProcessingFormHandler{
 					tile.put("repoName", manifest.optString("repoName", ""));
 					tile.put("version", manifest.optInt("version"));
 					tile.put("productDefinitionLabel", manifest.optString("repoName", "") + " v" + manifest.optInt("version"));
+					// "Allocate Customer via Paula" job (2026-10-29): no firmware, just the new customer's key
+					if(StartDeployProcessingHandler.SET_CUSTOMER_TYPE.equals(manifest.optString("deploymentType", ""))){
+						tile.put("productDefinitionLabel", "Set customer key -> " + manifest.optString("customerName", ""));
+						tile.put("setCustomer", true);
+					}
 					// New Deployment = unit never configured yet (see StartDeployProcessingHandler.runNewDeployment)
 					tile.put("newDeployment", StartDeployProcessingHandler.NEW_DEPLOYMENT_TYPE.equals(manifest.optString("deploymentType", "")));
 

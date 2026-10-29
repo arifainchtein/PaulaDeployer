@@ -179,8 +179,15 @@ public class FirmwareFlasher {
 	// Wally - GetProductDefinition (the Inspect feature) replies with an "Ok-GetProductDefinition#..."
 	// data line, not a bare single-line ack, so the single-line MAX_WAIT read pingTarget/
 	// getTargetIpAddress use in the original isn't enough here.
+	// Never log a customer key (2026-10-29): hides the argument of SetSecret# and any 32-character
+	// base32 run (a key as GetSecret or some firmware's echo shows it).
+	public static String mask(String s) {
+		if (s == null) return null;
+		return s.replaceAll("SetSecret#[^#]*", "SetSecret#<hidden>").replaceAll("[A-Z2-7]{32}", "<hidden>");
+	}
+
 	public String sendCommandToTarget(String command, boolean excludeWallyPort) {
-		logger.debug("sendCommandToTarget: " + command);
+		logger.debug("sendCommandToTarget: " + mask(command));
 		// Stream 2 Chat holds the port open - opening it again here would fail or steal its output.
 		if (com.digitalstables.pauladeployer.chat.SerialChatStreamer.get().isRunning()) {
 			return "Failure - Stream 2 Chat is using the device's port. Stop it first.";
@@ -191,7 +198,7 @@ public class FirmwareFlasher {
 			return null;
 		}
 		String result = sendCommand(port, command);
-		logger.debug("sendCommandToTarget() result: " + result);
+		logger.debug("sendCommandToTarget() result: " + mask(result));
 		return result;
 	}
 

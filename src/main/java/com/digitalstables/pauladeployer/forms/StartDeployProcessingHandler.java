@@ -37,6 +37,10 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 	private static final long POST_FLASH_PING_RETRY_MILLIS = 3000;
 
 	public static final String NEW_DEPLOYMENT_TYPE = "NewDeployment";
+	// 2026-10-29: the factory's "Allocate Customer via Paula" - no firmware, just the new customer's
+	// key for a device that cannot come to the bench. See runSetCustomer.
+	public static final String SET_CUSTOMER_TYPE = "SetCustomer";
+	private static final Pattern TWELVE_HEX = Pattern.compile("\\b([0-9a-fA-F]{12})\\b");
 	private static final String SERIAL_EXTRACTOR_BIN_NAME = "serialnumberextractor.ino.bin";
 	private static final String SERIAL_EXTRACTOR_PARTITIONS_NAME = "serialnumberextractor.ino.partitions.bin";
 	private static final Pattern SERIAL_NUMBER_PATTERN = Pattern.compile("([0-9a-fA-F]{12})Ok");
@@ -67,7 +71,8 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 
 			String zipFileName = manifestFileName.replace(".manifest.json", ".zip");
 			File zipFile = new File(deployDir, zipFileName);
-			if(!zipFile.isFile()){
+			boolean setCustomer = SET_CUSTOMER_TYPE.equals(manifest.optString("deploymentType", ""));
+			if(!setCustomer && !zipFile.isFile()){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Deploy package zip not found: " + zipFileName);
 			}
 
@@ -97,7 +102,9 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			// has never been through Configure Device - see runNewDeployment.
 			JSONObject configuration = manifest.optJSONObject("configuration");
 			boolean newDeployment = NEW_DEPLOYMENT_TYPE.equals(manifest.optString("deploymentType", "")) && configuration != null;
-			Thread worker = newDeployment
+			Thread worker = setCustomer
+					? new Thread(() -> runSetCustomer(aDBManager, attemptId, manifestFile, manifest))
+					: newDeployment
 					? new Thread(() -> runNewDeployment(aDBManager, attemptId, zipFile, repoName, version, configuration))
 					: new Thread(() -> runDeploy(aDBManager, attemptId, zipFile, repoName, version, productDefinitionName));
 			worker.setDaemon(true);
@@ -324,6 +331,73 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			logger.info("attemptId=" + attemptId + " - new deployment finished, success=" + success);
 			aDBManager.completeAttempt(attemptId, success);
 		}
+	}
+
+	// "SetCustomer" (2026-10-29): give a device already in the field its new customer's key, the field
+	// version of the factory's Allocate Customer. No flashing: the device keeps its firmware and
+	// settings. Refuses unless the plugged-in device is the one in the manifest, and succeeds only on
+	// Ok-SetSecret. Afterwards the key is removed from the manifest on disk; Confirm then tells the
+	// factory (CompleteSetCustomer), which changes the customer and offers Send To DS again.
+	// Neither the key nor the device's replies are logged (GetProductDefinition holds WiFi passwords).
+	private void runSetCustomer(PersistenceManager aDBManager, int attemptId, File manifestFile, JSONObject manifest){
+		boolean success = false;
+		try{
+			String expectedSerial = manifest.optString("serialNumber", "");
+			String productName = manifest.optString("productName", "");
+			String customerName = manifest.optString("customerName", "");
+			String secret = manifest.optString("secret", "");
+			if(secret.isEmpty()){
+				aDBManager.appendLog(attemptId, "This job has no key in it (already used?) - nothing to do. Ask the factory to send it again.");
+				return;
+			}
+			FirmwareFlasher flasher = new FirmwareFlasher();
+			aDBManager.appendLog(attemptId, "Step 1/2: checking the plugged-in device is " + productName + " (" + expectedSerial + ")...");
+			String serial = serialFromReply(flasher.sendCommandToTarget("GetSerialNumber", true));
+			if(serial == null){
+				// Langley has no GetSerialNumber; its GetProductDefinition reply ends with the serial
+				String productDefinition = flasher.sendCommandToTarget("GetProductDefinition", true);
+				if(productDefinition != null && productDefinition.contains("Ok-GetProductDefinition")){
+					String line = productDefinition.substring(productDefinition.indexOf("Ok-GetProductDefinition")).split("\\r?\\n")[0];
+					String last = line.substring(line.lastIndexOf('#') + 1).trim();
+					if(last.matches("[0-9a-fA-F]{12}")) serial = last;
+				}
+			}
+			if(serial == null){
+				aDBManager.appendLog(attemptId, "Could not read the device's serial number - is it plugged in and running? Nothing changed.");
+				return;
+			}
+			aDBManager.updateAttemptSerialNumber(attemptId, serial);
+			if(!serial.equalsIgnoreCase(expectedSerial)){
+				aDBManager.appendLog(attemptId, "The plugged-in device is " + serial + ", not " + productName + " (" + expectedSerial + ") - nothing changed.");
+				return;
+			}
+			aDBManager.appendLog(attemptId, "Step 2/2: setting " + customerName + "'s key...");
+			String reply = flasher.sendCommandToTarget("SetSecret#" + secret + "#6#30", true);
+			if(reply == null || !reply.contains("Ok-SetSecret")){
+				aDBManager.appendLog(attemptId, "The device did not confirm the key (no Ok-SetSecret) - try again. The factory is not told.");
+				return;
+			}
+			success = true;
+			// The key is in the device now; take it off Paula's disk
+			manifest.remove("secret");
+			manifest.put("keySetOn", System.currentTimeMillis());
+			org.apache.commons.io.FileUtils.writeStringToFile(manifestFile, manifest.toString(4), "UTF-8");
+			aDBManager.appendLog(attemptId, productName + " now has " + customerName + "'s key. Press Confirm when this Paula is back on the factory network, then Send To DS in the factory.");
+		}catch(Exception e){
+			logger.warn("attemptId=" + attemptId + " - set customer failed: " + e.getClass().getSimpleName());
+			aDBManager.appendLog(attemptId, "Error: " + e.getClass().getSimpleName());
+			success = false;
+		}finally{
+			logger.info("attemptId=" + attemptId + " - set customer finished, success=" + success);
+			aDBManager.completeAttempt(attemptId, success);
+		}
+	}
+
+	// A 12-hex serial number on its own in a GetSerialNumber reply, or null
+	private static String serialFromReply(String reply){
+		if(reply == null) return null;
+		Matcher matcher = TWELVE_HEX.matcher(reply);
+		return matcher.find() ? matcher.group(1) : null;
 	}
 
 	// Logs the command and the device's reply. Like ConfigureDeviceProcessingHandler, a bad reply

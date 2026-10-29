@@ -35,15 +35,15 @@ public class SendCommandProcessingHandler extends ProcessingFormHandler{
 			if(command == null || command.trim().isEmpty()){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No command given.");
 			}
-			logger.info("Sending command to target device: " + command);
+			logger.info("Sending command to target device: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(command));
 
 			FirmwareFlasher flasher = new FirmwareFlasher();
 			String result = flasher.sendCommandToTarget(command, true);
 			if(result == null){
-				logger.warn("No response from target device for command: " + command);
+				logger.warn("No response from target device for command: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(command));
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No target device responded - is it plugged in?");
 			}
-			logger.debug("Response: " + result);
+			logger.debug("Response: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(result));
 
 			JSONObject data = new JSONObject();
 			data.put("response", result);

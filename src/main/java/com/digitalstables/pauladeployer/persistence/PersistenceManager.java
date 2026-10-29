@@ -205,7 +205,9 @@ public class PersistenceManager{
 	public JSONArray getUnreportedAttempts(){
 		String sql = "select id, manifestfile, productid, productname, serialnumber, reponame, version, "
 				+ "startedon, completedon, status, terminallog, productdefinitionid, reported from deployAttempt "
-				+ "where reported=false and status='Success' and productdefinitionid is not null";
+				+ "where reported=false and status='Success' and (productdefinitionid is not null "
+				// "Allocate Customer via Paula" jobs (2026-10-29) carry no product definition
+				+ "or manifestfile like '%\\_setcustomer\\_%')";
 		Connection connection = null;
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;

@@ -59,10 +59,16 @@ public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 				JSONObject attempt = pending.getJSONObject(i);
 				int attemptId = attempt.getInt("id");
 				int productId = attempt.getInt("productid");
-				int productDefinitionId = attempt.getInt("productdefinitionid");
+				int productDefinitionId = attempt.optInt("productdefinitionid", 0);  // none for SetCustomer jobs
 				String productName = attempt.optString("productname", "");
 				try{
-					if(isNewDeployment(attempt.optString("manifestfile", ""))){
+					JSONObject manifest = readManifest(attempt.optString("manifestfile", ""));
+					if(manifest != null && StartDeployProcessingHandler.SET_CUSTOMER_TYPE.equals(manifest.optString("deploymentType", ""))){
+						// 2026-10-29: the device took the new key; now the factory changes the customer
+						String serialNumber = attempt.optString("serialnumber", "");
+						postToFactory("formName=CompleteSetCustomer&id=" + productId + "&customerid=" + manifest.optInt("customerId")
+								+ "&serialNumber=" + URLEncoder.encode(serialNumber, "UTF-8"));
+					}else if(isNewDeployment(attempt.optString("manifestfile", ""))){
 						String serialNumber = attempt.optString("serialnumber", "");
 						if(serialNumber.isEmpty()) throw new IOException("no serial number was recorded for this deployment");
 						postToFactory("formName=CompleteNewDeployment&id=" + productId + "&productDefinitionid=" + productDefinitionId
@@ -88,6 +94,17 @@ public class ConfirmUpgradesProcessingHandler extends ProcessingFormHandler{
 			toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, e.getMessage(), Utils.getStringException(e));
 		}
 		return toReturn;
+	}
+
+	private JSONObject readManifest(String manifestFileName){
+		File manifestFile = new File(new File(Constants.PAULAUPLOADER_HOME, "deployPackages"), manifestFileName);
+		if(manifestFileName.isEmpty() || !manifestFile.isFile()) return null;
+		try{
+			return new JSONObject(FileUtils.readFileToString(manifestFile, "UTF-8"));
+		}catch(Exception e){
+			logger.warn("Could not read manifest " + manifestFileName + ": " + e.getMessage());
+			return null;
+		}
 	}
 
 	private boolean isNewDeployment(String manifestFileName){
