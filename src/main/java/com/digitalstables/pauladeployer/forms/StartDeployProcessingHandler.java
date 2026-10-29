@@ -354,12 +354,17 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			aDBManager.appendLog(attemptId, "Step 1/2: checking the plugged-in device is " + productName + " (" + expectedSerial + ")...");
 			String serial = serialFromReply(flasher.sendCommandToTarget("GetSerialNumber", true));
 			if(serial == null){
-				// Langley has no GetSerialNumber; its GetProductDefinition reply ends with the serial
+				// Not every firmware has GetSerialNumber; GetProductDefinition carries the serial in field 16,
+				// as Inspect reads it (2026-10-30: since #labelBuild#runningBuild it is no longer the last
+				// field, which is what made this fail on TopTank). Older replies, e.g. Langley, end with it.
 				String productDefinition = flasher.sendCommandToTarget("GetProductDefinition", true);
 				if(productDefinition != null && productDefinition.contains("Ok-GetProductDefinition")){
 					String line = productDefinition.substring(productDefinition.indexOf("Ok-GetProductDefinition")).split("\\r?\\n")[0];
-					String last = line.substring(line.lastIndexOf('#') + 1).trim();
-					if(last.matches("[0-9a-fA-F]{12}")) serial = last;
+					String[] parts = line.split("#");
+					String field16 = parts.length > 16 ? parts[16].trim() : "";
+					String last = parts[parts.length - 1].trim();
+					if(field16.matches("[0-9a-fA-F]{12}")) serial = field16;
+					else if(last.matches("[0-9a-fA-F]{12}")) serial = last;
 				}
 			}
 			if(serial == null){
