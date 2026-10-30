@@ -131,8 +131,43 @@ public class PersistenceManager{
 		}
 	}
 
+	// 2026-10-30: an attempt left Running (Tomcat restarted under it, or it hung) blocked its package for
+	// good: only a Failed one can be removed or retried. These end Running attempts as Failed, with the
+	// reason added to the log the screen shows. Returns how many were ended.
+	public int failRunningAttemptsStartedBefore(long startedBeforeMillis, String reason){
+		return failRunning("startedon < ?", startedBeforeMillis, reason);
+	}
+
+	public boolean failRunningAttempt(int attemptId, String reason){
+		return failRunning("id = ?", attemptId, reason) > 0;
+	}
+
+	private int failRunning(String condition, long value, String reason){
+		String sql = "update deployAttempt set status='Failed', completedon=?, terminallog=coalesce(terminallog,'') || ? "
+				+ "where status='Running' and " + condition;
+		Connection connection = null;
+		PreparedStatement preparedStatement = null;
+		try{
+			connection = connectionPool.getConnection();
+			preparedStatement = connection.prepareStatement(sql);
+			preparedStatement.setLong(1, System.currentTimeMillis());
+			preparedStatement.setString(2, "\n" + reason + "\n");
+			preparedStatement.setLong(3, value);
+			int ended = preparedStatement.executeUpdate();
+			if(ended > 0) logger.warn("ended " + ended + " Running deployAttempt(s): " + reason);
+			return ended;
+		}catch(SQLException e){
+			logger.warn(Utils.getStringException(e));
+			return 0;
+		}finally{
+			closeQuietly(null, preparedStatement, connection);
+		}
+	}
+
+	// Only a Running attempt: one already cancelled or timed out (failRunning...) keeps that outcome even
+	// if its thread finishes later.
 	public void completeAttempt(int attemptId, boolean success){
-		String sql = "update deployAttempt set status=?, completedon=? where id=?";
+		String sql = "update deployAttempt set status=?, completedon=? where id=? and status='Running'";
 		Connection connection = null;
 		PreparedStatement preparedStatement = null;
 		try{

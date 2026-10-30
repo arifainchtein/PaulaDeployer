@@ -47,6 +47,11 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 	// The factory bench uses 8s for each CSW calibration reset; longer here since the operator is
 	// reading the prompt off a phone in the field.
 	private static final long CSW_RESET_WAIT_MILLIS = 15000;
+	// 2026-10-30: a Running attempt older than this is ended as Failed (GetDeployQueue), so a hung one
+	// cannot block its package for ever. New Deployment has manual steps (RESET, CSW calibration).
+	public static final long ATTEMPT_TIMEOUT_MILLIS = 30 * 60 * 1000L;
+	// The background thread of each running attempt, for CancelDeploy
+	public static final java.util.Map<Integer, Thread> RUNNING_ATTEMPTS = new java.util.concurrent.ConcurrentHashMap<>();
 
 	public StartDeployProcessingHandler(HttpServletRequest req, HttpServletResponse res, ServletContext servletContext) throws ServletException{
 		super(req, res, servletContext);
@@ -102,12 +107,20 @@ public class StartDeployProcessingHandler extends ProcessingFormHandler{
 			// has never been through Configure Device - see runNewDeployment.
 			JSONObject configuration = manifest.optJSONObject("configuration");
 			boolean newDeployment = NEW_DEPLOYMENT_TYPE.equals(manifest.optString("deploymentType", "")) && configuration != null;
-			Thread worker = setCustomer
-					? new Thread(() -> runSetCustomer(aDBManager, attemptId, manifestFile, manifest))
+			Runnable job = setCustomer
+					? () -> runSetCustomer(aDBManager, attemptId, manifestFile, manifest)
 					: newDeployment
-					? new Thread(() -> runNewDeployment(aDBManager, attemptId, zipFile, repoName, version, configuration))
-					: new Thread(() -> runDeploy(aDBManager, attemptId, zipFile, repoName, version, productDefinitionName));
+					? () -> runNewDeployment(aDBManager, attemptId, zipFile, repoName, version, configuration)
+					: () -> runDeploy(aDBManager, attemptId, zipFile, repoName, version, productDefinitionName);
+			Thread worker = new Thread(() -> {
+				try {
+					job.run();
+				} finally {
+					RUNNING_ATTEMPTS.remove(attemptId);
+				}
+			});
 			worker.setDaemon(true);
+			RUNNING_ATTEMPTS.put(attemptId, worker);
 			worker.start();
 
 			JSONObject data = new JSONObject();

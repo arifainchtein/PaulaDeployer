@@ -665,7 +665,30 @@ $(function(){
 		startDeploy(manifestFile, deviceName, definitionLabel);
 	});
 
-	$(document).on('click', '.pd-tile-remove', function(){
+	// 2026-10-30: Cancel a running deployment - see CancelDeployProcessingHandler
+	$(document).on('click', '#cancel-deploy-btn, .pd-tile-cancel', function(e){
+		e.stopPropagation();
+		var btn = $(this);
+		var name = btn.data('name') || $('#terminal-title').text();
+		if(!confirm('Cancel the deployment for ' + name + '? It is marked Failed; you can then retry or remove it. A flash already writing finishes by itself - check the device with Inspect afterwards.')) return;
+		btn.prop('disabled', true);
+		$.ajax({
+			type: "POST",
+			url: "PaulaDeployerServlet",
+			data: {formName: "CancelDeploy", attemptId: btn.data('attempt')},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert('Could not cancel: ' + result[DATA_KEY]);
+				if(btn.hasClass('pd-tile-cancel')) loadQueue();
+			},
+			error: function(){
+				btn.prop('disabled', false);
+				alert('Request failed.');
+			}
+		});
+	});
+
+	$(document).on('click', '.pd-tile-remove:not(.pd-tile-cancel)', function(){
 		var btn = $(this);
 		if(!confirm('Remove the failed deployment for ' + btn.data('name') + ' from this Paula? This deletes its files here - send the deploy package again from the factory webapp to retry.')) return;
 		btn.prop('disabled', true);
@@ -884,6 +907,10 @@ function renderQueue(queue){
 		if(tile.tileStatus === 'Failed'){
 			html += '<button type="button" class="pd-tile-remove" title="Remove this failed deployment" data-manifest="' + escapeHtml(tile.manifestFile) + '" data-name="' + escapeHtml(tile.productName) + '">&times;</button>';
 		}
+		// 2026-10-30: a Running tile can be cancelled (it used to be stuck for good if Paula restarted)
+		if(tile.tileStatus === 'Running' && tile.lastAttemptId){
+			html += '<button type="button" class="pd-tile-remove pd-tile-cancel" title="Cancel this deployment" data-attempt="' + tile.lastAttemptId + '" data-name="' + escapeHtml(tile.productName) + '">&times;</button>';
+		}
 		html += '</div>';
 	});
 	$('#tile-grid').html(html);
@@ -919,6 +946,7 @@ function startDeploy(manifestFile, deviceName, definitionLabel){
 }
 
 function pollStatus(attemptId){
+	$('#cancel-deploy-btn').data('attempt', attemptId).prop('disabled', false).show();
 	pollTimer = setInterval(function(){
 		$.ajax({
 			type: "POST",
@@ -936,6 +964,7 @@ function pollStatus(attemptId){
 
 				if(data.status !== 'Running'){
 					stopPolling();
+					$('#cancel-deploy-btn').hide();
 					showCompletionBanner(data.status);
 					$('#return-btn').show();
 				}

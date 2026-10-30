@@ -37,6 +37,9 @@ public class GetDeployQueueProcessingHandler extends ProcessingFormHandler{
 		JSONObject toReturn;
 		try{
 			PersistenceManager aDBManager = (PersistenceManager) servletContext.getAttribute("DBManager");
+			// 2026-10-30: a hung attempt times out instead of blocking its package for ever
+			aDBManager.failRunningAttemptsStartedBefore(System.currentTimeMillis() - StartDeployProcessingHandler.ATTEMPT_TIMEOUT_MILLIS,
+					"Timed out: still running after " + (StartDeployProcessingHandler.ATTEMPT_TIMEOUT_MILLIS / 60000) + " minutes. Check the device (Inspect), then retry or remove.");
 			File deployDir = new File(Constants.PAULAUPLOADER_HOME, "deployPackages");
 			logger.debug("Scanning " + deployDir.getAbsolutePath() + " for manifests");
 

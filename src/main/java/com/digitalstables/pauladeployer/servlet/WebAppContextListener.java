@@ -36,6 +36,10 @@ public class WebAppContextListener implements ServletContextListener{
 		logger.info("PaulaDeployer starting up");
 		ServletContext servletContext = sce.getServletContext();
 		servletContext.setAttribute("DBManager", PersistenceManager.instance());
+		// 2026-10-30: an attempt still Running now lost its thread when Tomcat stopped; end it, or its
+		// package could never be removed or retried (Langley_W, attempt 69)
+		PersistenceManager.instance().failRunningAttemptsStartedBefore(System.currentTimeMillis(),
+				"Interrupted: Paula restarted while this attempt was running. Check the device (Inspect), then retry or remove.");
 		logger.info("PersistenceManager attached to servlet context - startup complete");
 
 		checkInScheduler = Executors.newSingleThreadScheduledExecutor();
