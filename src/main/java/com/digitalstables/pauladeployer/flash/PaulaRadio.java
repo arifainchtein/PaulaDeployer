@@ -63,6 +63,13 @@ public class PaulaRadio {
 	private String captureName;
 	private final Map<String, Object[]> summary = new TreeMap<String, Object[]>();
 	private final Map<String, String> namesBySerial = new HashMap<String, String>();
+	// Signal Map (2026-11-03): the phone's GPS position, sent with each poll. Paula itself has no GPS
+	// (that is Paula2), so each packet is stamped with where the phone was - "plat"/"plon"/"pacc" -
+	// if it was told within PHONE_POSITION_MAX_AGE, and the capture file gets it too, so a walk can
+	// be read back as "heard X at this spot".
+	private static final long PHONE_POSITION_MAX_AGE_MILLISECONDS = 30000;
+	private double phoneLat, phoneLon, phoneAccuracy;
+	private long phonePositionAt = 0;
 
 	public static PaulaRadio get() {
 		return INSTANCE;
@@ -214,6 +221,14 @@ public class PaulaRadio {
 		return result;
 	}
 
+	// Where the phone is (degrees, accuracy in metres) - see phoneLat.
+	public synchronized void setPhonePosition(double lat, double lon, double accuracy) {
+		phoneLat = lat;
+		phoneLon = lon;
+		phoneAccuracy = accuracy;
+		phonePositionAt = System.currentTimeMillis();
+	}
+
 	// True when line was a sniffer line (kept).
 	private boolean keepSniffed(String line) {
 		if (!line.startsWith(SNIFF_PREFIX)) return false;
@@ -229,6 +244,11 @@ public class PaulaRadio {
 		packet.put("time", time);
 		String label = labelOf(packet);
 		packet.put("label", label);
+		if (phonePositionAt > 0 && System.currentTimeMillis() - phonePositionAt < PHONE_POSITION_MAX_AGE_MILLISECONDS) {
+			packet.put("plat", phoneLat);
+			packet.put("plon", phoneLon);
+			packet.put("pacc", Math.round(phoneAccuracy));
+		}
 		sniffed.add(packet);
 		while (sniffed.size() > SNIFF_KEEP) sniffed.removeFirst();
 		Object[] entry = summary.get(label);
@@ -255,12 +275,15 @@ public class PaulaRadio {
 		return type;
 	}
 
-	// The same line the screen shows: 14:03:22 Cleotilde R -87 s -10.8
+	// The same line the screen shows: 14:03:22 Cleotilde R -87 s -10.8, then where the device says it
+	// is and where the phone was, when known: "at -37.133056,144.474722 paula -37.134001,144.475120 ~5m"
 	private static String captureLine(JSONObject p) {
 		if (p.has("raw")) return p.getString("time") + " " + p.getString("raw");
 		String line = p.getString("time") + " " + p.getString("label") + " R " + p.optInt("rssi") + " s "
 				+ String.format("%.1f", p.optDouble("snr"));
 		if (p.has("ok") && !p.getBoolean("ok")) line += "WeatherForecastUpdate".equals(p.optString("type")) ? " BAD CODE" : " BAD CHECKSUM";
+		if (p.has("lat")) line += String.format(" at %.6f,%.6f", p.getDouble("lat"), p.getDouble("lon"));
+		if (p.has("plat")) line += String.format(" paula %.6f,%.6f ~%dm", p.getDouble("plat"), p.getDouble("plon"), p.getLong("pacc"));
 		if (p.has("hex")) line += "\n    " + p.optInt("size") + " B: " + p.getString("hex");
 		return line;
 	}

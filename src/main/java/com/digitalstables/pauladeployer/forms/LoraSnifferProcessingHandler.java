@@ -19,6 +19,7 @@ import com.digitalstables.pauladeployer.utils.Utils;
 // LoraSniffer#1 is on; PaulaRadio keeps them (its port stays open, as for Nearby devices).
 //   action=start / stop, session=true|false  (session: opening / leaving the screen - see PaulaRadio.setSniffing)
 //   action=poll, after=<sequence>   -> {"sequence","sniffing","connected","capture","packets":[..]}
+//     plus, from the Signal Map, lat/lon/acc = the phone's position (PaulaRadio.setPhonePosition)
 // Each session is saved as a field capture, captures/lorasniffer/<date_time>.txt (FieldCaptures).
 public class LoraSnifferProcessingHandler extends ProcessingFormHandler{
 
@@ -37,6 +38,11 @@ public class LoraSnifferProcessingHandler extends ProcessingFormHandler{
 				if(error != null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", error);
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", PaulaRadio.get().sniffedAfter(Long.MAX_VALUE).toString());
 			}
+			Double lat = number(request.getParameter("lat")), lon = number(request.getParameter("lon"));
+			if(lat != null && lon != null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180){
+				Double acc = number(request.getParameter("acc"));
+				PaulaRadio.get().setPhonePosition(lat, lon, acc == null ? 0 : acc);
+			}
 			long after = 0;
 			String afterParam = request.getParameter("after");
 			if(afterParam != null && afterParam.matches("\\d+")) after = Long.parseLong(afterParam);
@@ -44,6 +50,17 @@ public class LoraSnifferProcessingHandler extends ProcessingFormHandler{
 		}catch(Exception e){
 			logger.warn(Utils.getStringException(e));
 			return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, e.getMessage(), Utils.getStringException(e));
+		}
+	}
+
+	// A finite number, or null.
+	private static Double number(String s){
+		if(s == null) return null;
+		try{
+			double d = Double.parseDouble(s);
+			return Double.isFinite(d) ? d : null;
+		}catch(NumberFormatException e){
+			return null;
 		}
 	}
 

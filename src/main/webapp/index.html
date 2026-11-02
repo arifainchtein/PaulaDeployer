@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Paula Deployer</title>
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="assets/leaflet/leaflet.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.7.13">
+<link rel="stylesheet" href="css/style.css?v=0.9.1">
 </head>
 <body>
 
@@ -104,6 +105,32 @@
   </div>
 </div>
 
+<!-- Nearby Devices (2026-10-14; a map since 2026-11-03, js/signalmap.js): everything Paula hears, on a
+     satellite map with the phone's GPS as Paula's position, and the banner on top saying how well
+     Annabelle - the gateway - is heard from here. Daffodils keep their WiFi on/off button. -->
+<div id="map-screen" class="pd-screen" style="display:none;">
+  <div class="pd-terminal-title">Nearby Devices <span id="map-status" class="pd-sniffer-status"></span></div>
+  <div id="map-annabelle" class="sm-banner sm-banner-none"></div>
+  <div id="map-position" class="sm-position"></div>
+  <div id="signal-map" class="sm-map"></div>
+  <div class="sm-map-buttons">
+    <button id="map-center-btn" type="button" class="btn btn-outline-primary">Centre on me</button>
+    <button id="map-fit-btn" type="button" class="btn btn-outline-primary">Show all</button>
+  </div>
+  <div id="map-list" class="sm-list"></div>
+  <div id="nearby-clock" style="font-size:14px;margin:10px 0 6px 0;"></div>
+  <div style="font-size:13px;color:#6c757d;">"WiFi on" keeps a Daffodil awake with WiFi for 15 minutes; then connect the phone to its hotspot. A sleeping one answers when it next wakes.</div>
+  <h6 style="margin-top:14px;">Paula's secret</h6>
+  <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">Paula's commands carry a code made from the customer's secret. If Paula's secret is different, every command is rejected (and Paula's LEDs 2-3 stay red). Plug one of the customer's Daffodils into the Pi (jumper on USB), then check or copy. The secret is never shown.</div>
+  <button id="nearby-check-secret" type="button" class="btn btn-sm btn-outline-secondary sm-btn">Check</button>
+  <button id="nearby-copy-secret" type="button" class="btn btn-sm btn-warning sm-btn">Copy secret to Paula</button>
+  <div id="nearby-secret-status" style="font-size:14px;margin-top:6px;"></div>
+  <div id="map-capture" class="pd-sniffer-capture" style="margin:12px 0 8px 0;"></div>
+  <div class="pd-terminal-buttons">
+    <button id="map-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
+  </div>
+</div>
+
 <!-- Inspect result modal -->
 <div class="modal fade" id="inspect-modal" tabindex="-1">
   <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
@@ -150,33 +177,6 @@
       </div>
       <div class="modal-footer">
         <button id="stream-chat-toggle-btn" type="button" class="btn btn-success me-auto">Start</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Nearby devices (2026-10-14): the Daffodils Paula hears over LoRa, with a WiFi on/off button -
-     the same command as Annabelle's web page (NearbyDevicesProcessingHandler). -->
-<div class="modal fade" id="nearby-modal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Nearby Devices</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div style="font-size:13px;color:#6c757d;margin-bottom:8px;">Daffodils Paula has heard. A device appears when it next sends: within a minute when awake, up to its sleep time when asleep. "Turn WiFi on" keeps it awake with WiFi for 15 minutes; then connect the phone to the Daffodil's hotspot.</div>
-        <div id="nearby-clock" style="font-size:14px;margin-bottom:6px;"></div>
-        <div id="nearby-status" style="font-size:14px;margin-bottom:6px;"></div>
-        <div id="nearby-list"></div>
-        <h6 style="margin-top:14px;">Paula's secret</h6>
-        <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">Paula's commands carry a code made from the customer's secret. If Paula's secret is different, every command is rejected (and Paula's LEDs 2-3 stay red). Plug one of the customer's Daffodils into the Pi (jumper on USB), then check or copy. The secret is never shown.</div>
-        <button id="nearby-check-secret" type="button" class="btn btn-sm btn-outline-secondary">Check</button>
-        <button id="nearby-copy-secret" type="button" class="btn btn-sm btn-warning">Copy secret to Paula</button>
-        <div id="nearby-secret-status" style="font-size:14px;margin-top:6px;"></div>
-      </div>
-      <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
@@ -325,6 +325,8 @@
 
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
-<script src="js/app.js?v=0.7.13"></script>
+<script src="assets/leaflet/leaflet.js"></script>
+<script src="js/app.js?v=0.9.1"></script>
+<script src="js/signalmap.js?v=0.9.1"></script>
 </body>
 </html>

@@ -282,17 +282,8 @@ $(function(){
 	});
 	$('#stream-chat-refresh-btn').on('click', loadStreamChatParticipants);
 
-	// "Nearby Devices" - see NearbyDevicesProcessingHandler. Polls every 5 s while open.
-	$('#nearby-btn').on('click', function(){
-		$('#nearby-status').text('Talking to Paula...');
-		loadNearbyDevices();
-		if(!nearbyTimer) nearbyTimer = setInterval(loadNearbyDevices, 5000);
-		bootstrap.Modal.getOrCreateInstance(document.getElementById('nearby-modal')).show();
-	});
-	$('#nearby-modal').on('hidden.bs.modal', function(){
-		clearInterval(nearbyTimer);
-		nearbyTimer = null;
-	});
+	// "Nearby Devices" opens the Signal Map screen (js/signalmap.js, 2026-11-03) - the list with WiFi
+	// on/off is part of it. Its Paula's-secret and Paula's-clock tools are handled here.
 	$('#nearby-check-secret, #nearby-copy-secret').on('click', function(){
 		var copy = this.id === 'nearby-copy-secret';
 		if(copy && !confirm('Copy the plugged-in Daffodil\'s secret into Paula?')) return;
@@ -322,20 +313,7 @@ $(function(){
 			success: function(raw){
 				var result = JSON.parse(raw);
 				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
-				setTimeout(loadNearbyDevices, 1500);
-			},
-			error: function(){ alert('Request failed.'); $b.prop('disabled', false); }
-		});
-	});
-	$('#nearby-list').on('click', '.nearby-wifi', function(){
-		var $b = $(this).prop('disabled', true);
-		$.ajax({
-			type: "POST", url: "PaulaDeployerServlet",
-			data: {formName: "NearbyDevices", action: "wifi", serial: $b.data('serial'), state: $b.data('state')},
-			success: function(raw){
-				var result = JSON.parse(raw);
-				if(result[STATUS_KEY] !== STATUS_SUCCESS) alert(result[DATA_KEY]);
-				loadNearbyDevices();
+				setTimeout(loadSignalMapNearby, 1500);
 			},
 			error: function(){ alert('Request failed.'); $b.prop('disabled', false); }
 		});
@@ -1219,7 +1197,6 @@ function escapeHtml(s){
 
 // ---------------------------------------------------------------- Nearby devices (2026-10-14)
 
-var nearbyTimer = null;
 var NEARBY_WIFI = {1: 'own hotspot', 2: 'router, no internet', 3: 'router + internet'};
 
 function nearbyAgo(sec){
@@ -1228,43 +1205,7 @@ function nearbyAgo(sec){
 	return Math.floor(sec / 3600) + ' h ' + Math.floor((sec % 3600) / 60) + ' min ago';
 }
 
-function loadNearbyDevices(){
-	$.ajax({
-		type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "list"},
-		success: function(raw){
-			var result = JSON.parse(raw);
-			if(result[STATUS_KEY] !== STATUS_SUCCESS){
-				$('#nearby-status').html('<span class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</span>');
-				return;
-			}
-			var listing = JSON.parse(result[DATA_KEY]);
-			var devices = listing.devices || [];
-			showNearbyClock(listing);
-			$('#nearby-status').text(devices.length ? '' : 'None heard yet - waiting for a device to send.');
-			$('#nearby-list').html(devices.map(nearbyDeviceHtml).join(''));
-		},
-		error: function(){ $('#nearby-status').html('<span class="text-danger">Request failed.</span>'); }
-	});
-}
-
-function nearbyDeviceHtml(d){
-	var on = d.wifi > 0, c = d.cmd, pending = c && c.state === 1;
-	var wifi = on ? '<span style="color:#2e7d32">&#10003; WiFi on</span> - ' + escapeHtml(NEARBY_WIFI[d.wifi] || ('status ' + d.wifi))
-		: '<span class="text-danger">&#10007; WiFi off</span>';
-	var note = '';
-	if(pending) note = '<div style="color:#ef6c00">Turning ' + (c.on ? 'on' : 'off') + '... sent ' + c.sends + 'x, ' + nearbyAgo(c.ageSec)
-		+ (d.sleep > 0 ? ' - asleep, answers when it wakes (every ' + d.sleep + ' s)' : '') + '</div>';
-	else if(c && c.state === 2) note = '<div class="text-muted">Turned ' + (c.on ? 'on' : 'off') + ' ' + nearbyAgo(c.ageSec) + '</div>';
-	else if(c && c.state === 3) note = '<div class="text-danger">Gave up after 15 min - device not heard</div>';
-	var btn = pending ? '<button type="button" class="btn btn-outline-secondary btn-sm" disabled>Waiting...</button>'
-		: '<button type="button" class="btn ' + (on ? 'btn-outline-secondary' : 'btn-primary') + ' btn-sm nearby-wifi" data-serial="' + escapeHtml(d.serial) + '" data-state="' + (on ? 'off' : 'on') + '">'
-		  + (on ? 'Turn WiFi off' : 'Turn WiFi on') + '</button>';
-	return '<div style="border-bottom:1px solid #eee;padding:8px 0;font-size:14px;">'
-		+ '<div class="d-flex justify-content-between align-items-center" style="gap:8px;"><strong>' + escapeHtml(d.name || d.serial) + '</strong>' + btn + '</div>'
-		+ '<div>' + wifi + ' &middot; ' + Number(d.battery).toFixed(2) + ' V &middot; ' + (d.sleep > 0 ? 'asleep ' + d.sleep + ' s' : 'awake')
-		+ ' &middot; heard ' + nearbyAgo(d.ageSec) + ' (' + d.rssi + ' dBm)</div>' + note
-		+ '<div class="text-muted" style="font-family:monospace;font-size:12px;">' + escapeHtml(d.serial) + '</div></div>';
-}
+// The list itself: signalmap.js (loadSignalMapNearby, signalMapRowHtml).
 
 // Paula's clock against the Pi's - Daffodils reject commands more than 15 min off.
 function showNearbyClock(listing){

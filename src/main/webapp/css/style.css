@@ -306,3 +306,30 @@ html, body {
 .pd-sniffer-summary { max-height: 150px; overflow-y: auto; margin-bottom: 14px; font-size: 14px; }
 .pd-sniffer-summary th { position: sticky; top: 0; background: #fff; }
 .pd-sniffer-capture { font-size: 13px; color: #6c757d; margin: -8px 0 8px 0; word-break: break-all; }
+
+/* Nearby Devices / Signal Map (js/signalmap.js, 2026-11-03) */
+/* isolation: Leaflet's panes use z-index up to 1000 - kept inside the map, under the sticky header */
+.sm-map { height: 48vh; height: 48dvh; min-height: 260px; border-radius: 8px; isolation: isolate; background: #d5d9dc; }
+.sm-map-buttons { display: flex; gap: 8px; margin: 8px 0 10px 0; }
+.sm-map-buttons .btn { flex: 1; min-height: 40px; }
+.sm-position { font-size: 13px; color: #495057; margin: 0 0 6px 0; line-height: 1.35; }
+.sm-position code { font-size: 12px; word-break: break-all; }
+.sm-banner { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; font-size: 15px; line-height: 1.3; border: 1px solid transparent; }
+.sm-banner-good { background: #ebfbee; border-color: #8ce99a; color: #1b4d26; }
+.sm-banner-fair { background: #fff9db; border-color: #ffd43b; color: #5c4400; }
+.sm-banner-weak { background: #fff5f5; border-color: #ffa8a8; color: #6b1515; }
+.sm-banner-none { background: #f1f3f5; border-color: #dee2e6; color: #495057; }
+.sm-banner-sub { font-size: 13px; opacity: 0.85; }
+.sm-bars { display: inline-flex; align-items: flex-end; gap: 2px; flex: 0 0 auto; height: 20px; }
+.sm-bars i { display: block; width: 5px; border-radius: 1px; background: #ced4da; }
+.sm-good i.on { background: #2f9e44; }
+.sm-fair i.on { background: #f08c00; }
+.sm-weak i.on { background: #e03131; }
+.sm-list { font-size: 14px; }
+.sm-row { border-bottom: 1px solid #e3e6e8; padding: 8px 0; }
+.sm-row-top { display: flex; align-items: center; gap: 8px; }
+.sm-row-name { font-size: 15px; }
+.sm-row-detail, .sm-row-wifi { color: #495057; font-size: 13px; margin-top: 2px; }
+.sm-row-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sm-btn { min-height: 36px; padding-left: 12px; padding-right: 12px; }
+.sm-label { font-size: 12px; font-weight: 600; padding: 1px 5px; }
