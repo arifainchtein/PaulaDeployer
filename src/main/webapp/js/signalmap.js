@@ -548,7 +548,24 @@ function renderSignalMapPing(){
 	var v = pingVerdict(smPing);
 	var html = '<div class="sm-ping-title">' + (v.cls === 'none' ? '&#10007; ' : v.cls === 'relay' ? '&#8644; ' : '&#10003; ') + v.title + '</div>'
 		+ '<div class="sm-ping-detail">' + v.detail + '</div>';
-	var n = Object.keys(smPing.answers).length;
+	// who answered (2026-11-03): Annabelle first, then the rest by how strongly they heard the ping
+	var keys = Object.keys(smPing.answers).sort(function(x, y){
+		if(x === 'Annabelle') return -1;
+		if(y === 'Annabelle') return 1;
+		return smPing.answers[y].prssi - smPing.answers[x].prssi;
+	});
+	if(keys.length){
+		html += '<ul class="sm-ping-answers">' + keys.map(function(key){
+			var a = smPing.answers[key];
+			var line = '<strong>' + escapeHtml(key) + '</strong> heard you at <span class="sm-ping-' + signalClass(a.prssi) + '-text">R ' + a.prssi
+				+ '</span> (SNR ' + Number(a.psnr).toFixed(1) + ')';
+			if(key !== 'Annabelle') line += a.grssi !== undefined
+				? ' &middot; hears Annabelle at <span class="sm-ping-' + signalClass(a.grssi) + '-text">R ' + a.grssi + '</span>'
+				: ' &middot; doesn\'t report hearing Annabelle';
+			return '<li>' + line + '</li>';
+		}).join('') + '</ul>';
+	}
+	var n = keys.length;
 	html += '<div class="sm-ping-meta">' + head + ' &middot; ' + n + ' answer' + (n === 1 ? '' : 's')
 		+ (smPing.lat === undefined ? ' &middot; no position, so no dot on the map' : '') + '</div>';
 	$p.attr('class', 'sm-ping sm-ping-' + v.cls).html(html).show();

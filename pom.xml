@@ -15,7 +15,7 @@
     <!-- Same deploy-on-package pattern as the factory webapp's own pom.xml and
          ~/Data/Aquabubbler/software/lucille's - server.user is Paula's OS user (confirmed "pi"
          from bench sessions), not this dev machine's. -->
-    <server.address>paula2.local</server.address>
+    <server.address>paula3.local</server.address>
     <server.user>pi</server.user>
     <private.key>/home/ari/.ssh/chilhuacle</private.key>
   </properties>
