@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/leaflet/leaflet.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.9.3">
+<link rel="stylesheet" href="css/style.css?v=0.9.4">
 </head>
 <body>
 
@@ -45,6 +45,11 @@
     <div class="pd-footer-left">
       <button id="shutdown-btn" type="button" class="pd-shutdown-btn" title="Shut down this Pi">&#9211;</button>
       <button id="restart-tomcat-btn" type="button" class="pd-shutdown-btn pd-restart-btn" title="Restart Tomcat (PaulaDeployer)">&#8635;</button>
+      <!-- Reconnect Wi-Fi (2026-11-03): wlan1 (house WiFi / phone hotspot) down and up again, no reboot - ReconnectWifiProcessingHandler -->
+      <button id="reconnect-wifi-btn" type="button" class="pd-shutdown-btn pd-wifi-btn" title="Reconnect Wi-Fi to the house network (wlan1)">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 18.5a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5zm-4.6-3.1a6.5 6.5 0 0 1 9.2 0l-1.5 1.5a4.4 4.4 0 0 0-6.2 0zM4.2 12.2a11 11 0 0 1 15.6 0l-1.5 1.5a8.9 8.9 0 0 0-12.6 0zM1 9a15.5 15.5 0 0 1 22 0l-1.5 1.5a13.4 13.4 0 0 0-19 0z"/></svg>
+      </button>
+      <span id="reconnect-wifi-status" class="pd-wifi-status"></span>
     </div>
     <div class="pd-footer-right">
       <button id="remove-confirmed-btn" type="button" class="btn btn-outline-danger pd-remove-btn" style="display:none;">Remove</button>
@@ -335,7 +340,7 @@
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
 <script src="assets/leaflet/leaflet.js"></script>
-<script src="js/app.js?v=0.9.3"></script>
-<script src="js/signalmap.js?v=0.9.3"></script>
+<script src="js/app.js?v=0.9.4"></script>
+<script src="js/signalmap.js?v=0.9.4"></script>
 </body>
 </html>

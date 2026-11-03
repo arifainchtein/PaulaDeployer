@@ -169,6 +169,40 @@ $(function(){
 		});
 	});
 
+	// Reconnect Wi-Fi (2026-11-03) - see ReconnectWifiProcessingHandler. wlan1 down and up, the way boot
+	// does it; the phone is normally on Paula's own hotspot (wlan0), which stays up. Then WifiNetwork
+	// status is polled every 5 s for up to 2.5 min to say whether it came back.
+	$('#reconnect-wifi-btn').on('click', function(){
+		if(!confirm('Reconnect Paula to the house Wi-Fi (wlan1)? Paula\'s own hotspot stays on. Takes up to 2 minutes.')) return;
+		var btn = $(this).prop('disabled', true).addClass('pd-spinning');
+		var status = $('#reconnect-wifi-status').text('Reconnecting...');
+		function finish(text){ btn.prop('disabled', false).removeClass('pd-spinning'); status.text(text); setTimeout(function(){ status.text(''); }, 15000); }
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet", data: {formName: "ReconnectWifi"},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS){ finish(''); alert('Could not reconnect: ' + result[DATA_KEY]); return; }
+				var started = Date.now();
+				(function poll(){
+					// give ifdown time to happen first, so an old "connected" isn't taken as success
+					setTimeout(function(){
+						$.ajax({
+							type: "POST", url: "PaulaDeployerServlet", data: {formName: "WifiNetwork"}, timeout: 10000,
+							success: function(raw2){
+								var r = JSON.parse(raw2), d = r[STATUS_KEY] === STATUS_SUCCESS ? JSON.parse(r[DATA_KEY]) : null;
+								if(d && d.connected && Date.now() - started > 15000){ finish('Connected to ' + d.ssid); loadHeaderInfo(); return; }
+								if(Date.now() - started > 150000){ finish('Still not connected'); alert('wlan1 did not reconnect. Check the USB WiFi dongle is plugged in and the network is in range; if it still fails, reboot Paula. (Log: journalctl -t paula-wifi)'); return; }
+								poll();
+							},
+							error: function(){ if(Date.now() - started > 150000){ finish('No answer'); return; } poll(); }
+						});
+					}, 5000);
+				})();
+			},
+			error: function(){ finish(''); alert('Request failed.'); }
+		});
+	});
+
 	function waitForTomcatThenReload(startedAt){
 		// give it time to actually go down before the first probe, so we don't hit the old process
 		setTimeout(function probe(){

@@ -351,3 +351,10 @@ html, body {
 .sm-ping-good-text { color: #2f9e44; font-weight: 600; }
 .sm-ping-fair-text { color: #e67700; font-weight: 600; }
 .sm-ping-weak-text { color: #e03131; font-weight: 600; }
+
+/* Reconnect Wi-Fi footer button (2026-11-03) */
+.pd-wifi-btn { background: #1c7ed6; color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+.pd-wifi-btn:disabled { opacity: 0.7; }
+.pd-spinning svg { animation: pd-pulse 1s ease-in-out infinite; }
+@keyframes pd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.pd-wifi-status { font-size: 12px; color: #495057; max-width: 110px; line-height: 1.2; }
