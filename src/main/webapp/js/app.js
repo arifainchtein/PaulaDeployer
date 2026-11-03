@@ -284,7 +284,7 @@ $(function(){
 	});
 
 	$('#inspect-btn').on('click', function(){
-		$('#inspect-body').html('<div class="pd-empty-message">Talking to the device...</div>');
+		$('#inspect-body').html('<div class="pd-empty-message">Talking to Paula and the device...</div>');
 		var modalEl = document.getElementById('inspect-modal');
 		var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 		modal.show();
@@ -1030,7 +1030,38 @@ function formatDeviceEpoch(value){
 	}).replace(',', '');
 }
 
+// Inspect (2026-11-03): the USB serial ports, the device plugged in, and Paula itself - see
+// InspectProcessingHandler. Doubles as the "is the USB working?" check.
 function renderInspect(data){
+	var html = '<h6>USB ports</h6>';
+	var ports = data.ports || [];
+	if(!ports.length){
+		html += '<div class="text-danger" style="margin-bottom:12px;">No USB serial devices seen at all - check the cables (and that the device is powered).</div>';
+	}else{
+		html += '<ul class="pd-inspect-ports">' + ports.map(function(p){
+			return '<li><strong>' + escapeHtml(p.name) + '</strong> &middot; ' + escapeHtml(p.description || 'USB serial') + ' (' + escapeHtml(p.usbId) + ') &middot; '
+				+ (p.role === 'paula' ? 'Paula' : 'device') + ' '
+				+ (p.answered ? '<span style="color:#2e7d32">&#10003; answered</span>' : '<span class="text-danger">&#10007; no answer</span>') + '</li>';
+		}).join('') + '</ul>';
+	}
+	html += '<h6>Device plugged in</h6>';
+	html += data.targetFound ? productDefinitionTableHtml(data) : '<div class="text-muted" style="margin-bottom:12px;">' + escapeHtml(data.targetError || 'No device answered.') + '</div>';
+	var paula = data.paula || {};
+	html += '<h6>Paula (this unit)</h6>';
+	if(paula.error){
+		html += '<div class="text-danger">' + escapeHtml(paula.error) + '</div>';
+		if(paula.runningFirmware) html += '<div>Running: ' + escapeHtml(paula.runningFirmware) + '</div>';
+	}else{
+		html += '<table class="table table-sm">'
+			+ [['Name', paula.name], ['Firmware label', paula.firmware], ['Running', paula.runningFirmware || ''], ['Serial Number', paula.serialNumber],
+			   ['Device Name', paula.deviceName], ['PCBs', paula.pcbs], ['Current Time', formatDeviceEpoch(paula.currenttime)], ['Port', paula.port || '']]
+			.map(function(r){ return '<tr><th>' + escapeHtml(r[0]) + '</th><td>' + escapeHtml(r[1]) + '</td></tr>'; }).join('')
+			+ '</table>';
+	}
+	$('#inspect-body').html(html);
+}
+
+function productDefinitionTableHtml(data){
 	// Third element = already-escaped HTML (used instead of the plain value).
 	var rows = [
 		['Name', data.name],
@@ -1054,7 +1085,7 @@ function renderInspect(data){
 		html += '<tr><th>' + escapeHtml(row[0]) + '</th><td>' + (row.length > 2 ? row[2] : escapeHtml(row[1])) + '</td></tr>';
 	});
 	html += '</table>';
-	$('#inspect-body').html(html);
+	return html;
 }
 
 // The device saves the running build stamp along with the firmware label (SetProductDefinition),
