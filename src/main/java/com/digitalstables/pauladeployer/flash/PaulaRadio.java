@@ -221,6 +221,30 @@ public class PaulaRadio {
 		return result;
 	}
 
+	// Signal survey ping (2026-11-03): Paula pings every device at `power` dBm (Paula.ino sendPing);
+	// their answers arrive as SNIFF lines of type LinkAck over the next ~5.5 s and are kept like any
+	// packet. Returns {"probe":<senderTime>,"seq":<n>,"power":<dBm>}, or null when Paula didn't answer.
+	// The ping goes into the capture file, with where the phone was.
+	public synchronized JSONObject ping(int power) {
+		String reply = command("Ping#" + power, 4000);
+		if (reply == null) return null;
+		for (String line : reply.split("\n")) {
+			if (!line.startsWith("Ok-Ping#")) continue;
+			String[] f = line.split("#");
+			if (f.length < 4) return null;
+			JSONObject result = new JSONObject();
+			result.put("probe", Long.parseLong(f[1].trim()));
+			result.put("seq", Integer.parseInt(f[2].trim()));
+			result.put("power", Integer.parseInt(f[3].trim()));
+			String at = phonePositionAt > 0 && System.currentTimeMillis() - phonePositionAt < PHONE_POSITION_MAX_AGE_MILLISECONDS
+					? String.format(" paula %.6f,%.6f ~%dm", phoneLat, phoneLon, Math.round(phoneAccuracy)) : "";
+			writeCapture(LocalTime.now(ZoneId.of(Constants.DEVICE_TIME_ZONE)).format(HMS) + " PING #" + f[2].trim()
+					+ " at " + f[3].trim() + " dBm" + ("0".equals(f[1].trim()) ? " NOT SENT" : "") + at);
+			return result;
+		}
+		return null;
+	}
+
 	// Where the phone is (degrees, accuracy in metres) - see phoneLat.
 	public synchronized void setPhonePosition(double lat, double lon, double accuracy) {
 		phoneLat = lat;
@@ -282,6 +306,10 @@ public class PaulaRadio {
 		String line = p.getString("time") + " " + p.getString("label") + " R " + p.optInt("rssi") + " s "
 				+ String.format("%.1f", p.optDouble("snr"));
 		if (p.has("ok") && !p.getBoolean("ok")) line += "WeatherForecastUpdate".equals(p.optString("type")) ? " BAD CODE" : " BAD CHECKSUM";
+		if ("LinkAck".equals(p.optString("type"))) {
+			line += " answers PING #" + p.optInt("seq") + ": heard Paula R " + p.optInt("prssi") + " s " + String.format("%.1f", p.optDouble("psnr"));
+			if (p.has("grssi")) line += ", hears Annabelle R " + p.optInt("grssi") + " s " + String.format("%.1f", p.optDouble("gsnr")) + " (" + p.optInt("gage") + " s ago)";
+		}
 		if (p.has("lat")) line += String.format(" at %.6f,%.6f", p.getDouble("lat"), p.getDouble("lon"));
 		if (p.has("plat")) line += String.format(" paula %.6f,%.6f ~%dm", p.getDouble("plat"), p.getDouble("plon"), p.getLong("pacc"));
 		if (p.has("hex")) line += "\n    " + p.optInt("size") + " B: " + p.getString("hex");

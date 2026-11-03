@@ -20,6 +20,8 @@ import com.digitalstables.pauladeployer.utils.Utils;
 //   action=start / stop, session=true|false  (session: opening / leaving the screen - see PaulaRadio.setSniffing)
 //   action=poll, after=<sequence>   -> {"sequence","sniffing","connected","capture","packets":[..]}
 //     plus, from the Signal Map, lat/lon/acc = the phone's position (PaulaRadio.setPhonePosition)
+//   action=ping, power=<dBm>        -> {"probe","seq","power"} - Paula pings every device (2026-11-03);
+//                                      the answers come in later polls as LinkAck packets
 // Each session is saved as a field capture, captures/lorasniffer/<date_time>.txt (FieldCaptures).
 public class LoraSnifferProcessingHandler extends ProcessingFormHandler{
 
@@ -37,6 +39,16 @@ public class LoraSnifferProcessingHandler extends ProcessingFormHandler{
 				String error = PaulaRadio.get().setSniffing("start".equals(action), "true".equals(request.getParameter("session")));
 				if(error != null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", error);
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", PaulaRadio.get().sniffedAfter(Long.MAX_VALUE).toString());
+			}
+			if("ping".equals(action)){
+				int power = 5;
+				String p = request.getParameter("power");
+				if(p != null && p.matches("\\d{1,2}")) power = Integer.parseInt(p);
+				if(power < 2 || power > 17) power = 5;
+				JSONObject sent = PaulaRadio.get().ping(power);
+				if(sent == null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in, with the new Paula.ino?");
+				if(sent.getLong("probe") == 0) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula's radio failed to send the ping.");
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", sent.toString());
 			}
 			Double lat = number(request.getParameter("lat")), lon = number(request.getParameter("lon"));
 			if(lat != null && lon != null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180){

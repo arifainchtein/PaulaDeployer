@@ -1218,6 +1218,9 @@ function showNearbyClock(listing){
 	if(abs >= 900) html += ' - Daffodils will reject its commands';
 	if(listing.piNtpSynced === false) html += '<div class="text-danger">The Pi\'s clock is not internet-synced - press Set Pi Time first.</div>';
 	if(abs >= 60) html += ' <button type="button" class="btn btn-sm btn-warning" id="nearby-set-clock">Set Paula\'s clock</button>';
+	// Paula.ino's firmwareVersion (2026-11-03) - none at all means a build from before it, without the ping
+	html += '<div style="margin-top:4px;">Paula firmware: ' + (listing.firmware ? '<strong>' + escapeHtml(listing.firmware) + '</strong>'
+		: '<span class="text-danger">older than Version 1 - no Ping; flash the current Paula.ino</span>') + '</div>';
 	$('#nearby-clock').html(html);
 }
 

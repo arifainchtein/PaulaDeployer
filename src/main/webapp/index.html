@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/leaflet/leaflet.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.9.1">
+<link rel="stylesheet" href="css/style.css?v=0.9.3">
 </head>
 <body>
 
@@ -117,6 +117,15 @@
     <button id="map-center-btn" type="button" class="btn btn-outline-primary">Centre on me</button>
     <button id="map-fit-btn" type="button" class="btn btn-outline-primary">Show all</button>
   </div>
+  <!-- Ping (2026-11-03): Paula asks every listening device "do you hear me?" - signalmap.js sendSignalMapPing -->
+  <div class="sm-ping-row">
+    <button id="map-ping-btn" type="button" class="btn btn-primary sm-ping-btn">Ping from here</button>
+    <select id="map-ping-power" class="form-select sm-ping-power" title="Ping transmit power: 5 dBm = a Daffodil/Langley/Gloria, 17 dBm = Paula/Annabelle/Chinampa">
+      <option value="5" selected>5 dBm</option>
+      <option value="17">17 dBm</option>
+    </select>
+  </div>
+  <div id="map-ping" class="sm-ping" style="display:none;"></div>
   <div id="map-list" class="sm-list"></div>
   <div id="nearby-clock" style="font-size:14px;margin:10px 0 6px 0;"></div>
   <div style="font-size:13px;color:#6c757d;">"WiFi on" keeps a Daffodil awake with WiFi for 15 minutes; then connect the phone to its hotspot. A sleeping one answers when it next wakes.</div>
@@ -326,7 +335,7 @@
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
 <script src="assets/leaflet/leaflet.js"></script>
-<script src="js/app.js?v=0.9.1"></script>
-<script src="js/signalmap.js?v=0.9.1"></script>
+<script src="js/app.js?v=0.9.3"></script>
+<script src="js/signalmap.js?v=0.9.3"></script>
 </body>
 </html>

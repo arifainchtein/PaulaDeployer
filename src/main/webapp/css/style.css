@@ -333,3 +333,21 @@ html, body {
 .sm-row-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .sm-btn { min-height: 36px; padding-left: 12px; padding-right: 12px; }
 .sm-label { font-size: 12px; font-weight: 600; padding: 1px 5px; }
+
+/* Ping (signalmap.js, 2026-11-03) */
+.sm-ping-row { display: flex; gap: 8px; margin: 0 0 8px 0; }
+.sm-ping-btn { flex: 1; min-height: 48px; font-size: 17px; font-weight: 600; }
+.sm-ping-power { flex: 0 0 34%; min-height: 48px; font-size: 14px; }
+.sm-ping { border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.35; border: 1px solid transparent; }
+.sm-ping-title { font-size: 16px; font-weight: 700; }
+.sm-ping-detail { margin-top: 2px; }
+.sm-ping-meta { margin-top: 4px; font-size: 12px; opacity: 0.8; }
+.sm-ping-wait  { background: #e7f5ff; border-color: #74c0fc; color: #0b3d63; }
+.sm-ping-good  { background: #ebfbee; border-color: #8ce99a; color: #1b4d26; }
+.sm-ping-fair  { background: #fff9db; border-color: #ffd43b; color: #5c4400; }
+.sm-ping-weak  { background: #fff5f5; border-color: #ffa8a8; color: #6b1515; }
+.sm-ping-relay { background: #f3f0ff; border-color: #b197fc; color: #36206e; }
+.sm-ping-none  { background: #f1f3f5; border-color: #ced4da; color: #343a40; }
+.sm-ping-good-text { color: #2f9e44; font-weight: 600; }
+.sm-ping-fair-text { color: #e67700; font-weight: 600; }
+.sm-ping-weak-text { color: #e03131; font-weight: 600; }

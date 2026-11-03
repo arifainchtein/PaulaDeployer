@@ -37,6 +37,7 @@ $(function(){
 		else alert('No position yet - see the note above the map.');
 	});
 	$('#map-fit-btn').on('click', function(){ fitSignalMap(true); });
+	$('#map-ping-btn').on('click', sendSignalMapPing);
 	$('#map-list').on('click', '.sm-save-here', function(){
 		var key = $(this).data('key');
 		if(!smMe){ alert('Paula has no position yet - wait for the phone\'s GPS (or tap the map where you are).'); return; }
@@ -68,6 +69,7 @@ function openSignalMap(){
 	$('#main-screen').hide();
 	$('#map-screen').show();
 	smHeard = {}; smNearby = {}; smSequence = 0; smUserMoved = false; smFittedCount = 0;
+	resetSignalMapPings();
 	if(!smMap) initSignalMap();
 	Object.keys(smLayers).forEach(removeSignalMapLayer);
 	setTimeout(function(){ smMap.invalidateSize(); }, 0);  // it was laid out while hidden
@@ -133,10 +135,14 @@ function startSignalMapLocation(){
 // Chrome only gives the GPS to https pages (or ones it is told to trust) - this page is plain http.
 function showSignalMapLocationHelp(why){
 	if(smMe && !smMe.manual) return;
-	var html = why === 'blocked'
-		? '<strong>Phone location blocked</strong> (this page is http). One-time fix in Chrome: open <code>chrome://flags</code>, search '
-		  + '<em>Insecure origins treated as secure</em>, add <code>' + escapeHtml(location.origin) + '</code>, Enable, Relaunch. '
-		: '<strong>No GPS fix</strong> - check the phone\'s location is on. ';
+	// Over https (the Digital Stables certificate - PaulaUploader/https) it is the phone refusing;
+	// over http, the https address of this same Paula is the fix.
+	var https = 'https://' + location.hostname + '/';
+	var html;
+	if(why !== 'blocked') html = '<strong>No GPS fix</strong> - check the phone\'s location is on. ';
+	else if(location.protocol === 'https:') html = '<strong>Phone location blocked</strong> - allow location for this page in the browser\'s settings. ';
+	else html = '<strong>Phone location blocked</strong> - this page is http. Open <a href="' + escapeHtml(https) + '">' + escapeHtml(https) + '</a> '
+		+ '(the phone needs the Digital Stables certificate installed once). ';
 	html += 'Meanwhile, tap the map where you are.';
 	$('#map-position').html(html);
 }
@@ -185,9 +191,10 @@ function pollSignalMap(){
 // VitalSigns from a device whose name hasn't come in a data packet yet.
 function noteSignalMapPacket(p){
 	if(p.raw || p.ok === false || p.type === 'Unknown' || !p.type) return false;
-	var annabelle = p.type === 'WeatherForecastUpdate';
+	var annabelle = p.type === 'WeatherForecastUpdate' || (p.type === 'LinkAck' && p.kind === 1);
 	if(!annabelle && /^Vital signs /.test(p.label)) return false;
 	var key = annabelle ? 'Annabelle' : p.label;
+	if(p.type === 'LinkAck') notePingAnswer(key, p);
 	var h = smHeard[key];
 	if(!h || h.fromNearby) h = smHeard[key] = {key: key, name: key, count: 0, annabelle: annabelle, serial: h ? h.serial : undefined};
 	h.rssi = p.rssi;
@@ -294,6 +301,7 @@ function renderSignalMap(){
 			layer.line = null;
 		}
 	});
+	renderSignalMapPing();
 	renderSignalMapBanner(now);
 	renderSignalMapList(now);
 	if(!smUserMoved) fitSignalMap(false);
@@ -398,11 +406,161 @@ function signalMapRowHtml(key, now){
 	return '<div class="sm-row">'
 		+ '<div class="sm-row-top">' + barsHtml(h ? h.rssi : undefined, cls) + '<strong class="sm-row-name">' + escapeHtml(key) + '</strong></div>'
 		+ '<div class="sm-row-detail">' + line1 + '</div>'
-		+ '<div class="sm-row-detail">' + place + '</div>' + wifi
+		+ '<div class="sm-row-detail">' + place + '</div>' + pingRowHtml(key) + wifi
 		+ '<div class="sm-row-buttons">' + buttons + '</div></div>';
 }
 
 function showSignalMapCapture(capture){
 	if(!capture){ $('#map-capture').text('Not being saved - see the Pi\'s log'); return; }
 	$('#map-capture').html('Saving to <a href="captures/' + escapeHtml(capture) + '" target="_blank">captures/' + escapeHtml(capture) + '</a>');
+}
+
+
+// ---------------------------------------------------------------- Ping (phase 2, 2026-11-03)
+//
+// "Ping from here": Paula sends one DEVICE_COMMAND_PING to every device, at a Daffodil's 5 dBm by
+// default (Paula.ino sendPing), and every listening device answers within ~5.5 s with a LinkAckRecord
+// (LinkAckRecord.h): how strongly it heard the ping, and - for the others - how well it hears
+// Annabelle. So:
+//   - Annabelle answered: a device here reaches the gateway directly; its "heard Paula" RSSI says
+//     with how much margin.
+//   - only others answered: the ones that also hear Annabelle well are relay candidates for here.
+//   - nobody: no always-listening device hears this spot.
+// Each ping leaves a dot where it was sent, coloured by that verdict - walking around builds the
+// coverage map. Sleeping Daffodils don't hear pings (only in their few-second window after
+// VitalSigns), so "nobody" is about awake devices and Annabelle.
+
+var SM_PING_WAIT_MS = 7000;   // LINK_ACK_LISTEN_MS (5.5 s) + a poll or two
+var smPing = null;            // the current/last ping: {probe, seq, power, at, lat, lon, answers: {key: packet}, done}
+var smPingDots = [];          // one per ping this session: {marker}
+var smPingLayer = null;       // lines for the last ping's answers
+var smPingTimer = null;
+
+function resetSignalMapPings(){
+	smPing = null;
+	if(smPingTimer){ clearInterval(smPingTimer); smPingTimer = null; }
+	smPingDots.forEach(function(d){ smMap.removeLayer(d.marker); });
+	smPingDots = [];
+	if(smPingLayer) smPingLayer.clearLayers();
+	$('#map-ping-btn').prop('disabled', false).text('Ping from here');
+	$('#map-ping').hide().empty();
+}
+
+function sendSignalMapPing(){
+	var power = $('#map-ping-power').val() || 5;
+	$('#map-ping-btn').prop('disabled', true).text('Pinging...');
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "LoraSniffer", action: "ping", power: power},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){
+				$('#map-ping-btn').prop('disabled', false).text('Ping from here');
+				alert(result[DATA_KEY]);
+				return;
+			}
+			var sent = JSON.parse(result[DATA_KEY]);
+			smPing = {probe: sent.probe, seq: sent.seq, power: sent.power, at: Date.now(), answers: {}, done: false,
+				lat: smMe ? smMe.lat : undefined, lon: smMe ? smMe.lon : undefined};
+			if(smPingTimer) clearInterval(smPingTimer);
+			smPingTimer = setInterval(function(){
+				var left = Math.ceil((smPing.at + SM_PING_WAIT_MS - Date.now()) / 1000);
+				if(left > 0){ $('#map-ping-btn').text('Listening... ' + left + ' s'); return; }
+				clearInterval(smPingTimer); smPingTimer = null;
+				finishSignalMapPing();
+			}, 250);
+			renderSignalMap();
+		},
+		error: function(){
+			$('#map-ping-btn').prop('disabled', false).text('Ping from here');
+			alert('Request failed.');
+		}
+	});
+}
+
+// A LinkAck packet: kept if it answers the current ping (late ones still count while it is shown).
+function notePingAnswer(key, p){
+	if(!smPing || p.ok === false || p.probe !== smPing.probe) return;
+	smPing.answers[key] = p;
+	if(smPing.done) finishSignalMapPing();  // late answer: verdict and dot updated
+}
+
+// The verdict for the last ping: {cls: good|fair|weak|relay|none, title, detail, relays: [...]}
+function pingVerdict(ping){
+	var a = ping.answers.Annabelle;
+	var others = Object.keys(ping.answers).filter(function(k){ return k !== 'Annabelle'; }).map(function(k){ return ping.answers[k]; });
+	var relays = others.filter(function(p){ return p.grssi !== undefined; }).sort(function(x, y){
+		return Math.min(y.prssi, y.grssi) - Math.min(x.prssi, x.grssi);   // best weakest-link first
+	});
+	if(a){
+		var cls = signalClass(a.prssi);
+		var words = {good: 'reaches Annabelle directly', fair: 'reaches Annabelle, little margin', weak: 'reaches Annabelle, only just'};
+		return {cls: cls, relays: relays, title: 'A device here ' + words[cls],
+			detail: 'Annabelle heard the ping at R ' + a.prssi + ' dBm, SNR ' + Number(a.psnr).toFixed(1) + ' &middot; its answer came back at R ' + a.rssi};
+	}
+	if(relays.length){
+		var best = relays[0];
+		return {cls: 'relay', relays: relays, title: 'Annabelle did not answer - a relay is needed here',
+			detail: 'Best relay: <strong>' + escapeHtml(best.name) + '</strong> (heard the ping at R ' + best.prssi + ', hears Annabelle at R ' + best.grssi + ')'};
+	}
+	if(others.length) return {cls: 'none', relays: [], title: 'Annabelle did not answer', detail: escapeHtml(others.map(function(p){ return p.name; }).join(', ')) + ' heard the ping, but none of them reports hearing Annabelle'};
+	return {cls: 'none', relays: [], title: 'Nobody answered', detail: 'No awake device or Annabelle heard this spot (sleeping Daffodils never answer)'};
+}
+
+var SM_PING_COLOURS = {good: '#2f9e44', fair: '#f08c00', weak: '#e03131', relay: '#7048e8', none: '#495057'};
+
+function finishSignalMapPing(){
+	smPing.done = true;
+	$('#map-ping-btn').prop('disabled', false).text('Ping again');
+	var v = pingVerdict(smPing);
+	// the spot's dot - replaced when a late answer changes the verdict
+	if(smPing.lat !== undefined){
+		if(smPing.dot) smMap.removeLayer(smPing.dot);
+		smPing.dot = L.circleMarker([smPing.lat, smPing.lon], {radius: 7, weight: 2, color: '#fff', fillColor: SM_PING_COLOURS[v.cls], fillOpacity: 0.95})
+			.bindTooltip('Ping #' + smPing.seq + ': ' + v.title).addTo(smMap);
+		smPingDots = smPingDots.filter(function(d){ return d.seq !== smPing.seq; });
+		smPingDots.push({seq: smPing.seq, marker: smPing.dot});
+	}
+	renderSignalMap();
+}
+
+function renderSignalMapPing(){
+	if(!smPingLayer) smPingLayer = L.layerGroup().addTo(smMap);
+	smPingLayer.clearLayers();
+	var $p = $('#map-ping');
+	if(!smPing){ $p.hide(); return; }
+	var from = smPing.lat !== undefined ? [smPing.lat, smPing.lon] : null;
+	Object.keys(smPing.answers).forEach(function(key){
+		var a = smPing.answers[key], pos = signalMapPosition(key);
+		if(!pos) return;
+		if(from) L.polyline([from, [pos.lat, pos.lon]], {color: SM_COLOURS[signalClass(a.prssi)], weight: 6, opacity: 0.9, interactive: false}).addTo(smPingLayer);
+		// a relay's own link to Annabelle
+		var ann = signalMapPosition('Annabelle');
+		if(key !== 'Annabelle' && a.grssi !== undefined && ann){
+			L.polyline([[pos.lat, pos.lon], [ann.lat, ann.lon]], {color: SM_COLOURS[signalClass(a.grssi)], weight: 3, opacity: 0.85, dashArray: '2 8', interactive: false}).addTo(smPingLayer);
+		}
+	});
+	var head = 'Ping #' + smPing.seq + ' at ' + smPing.power + ' dBm' + (smPing.power == 5 ? ' (Daffodil power)' : '');
+	if(!smPing.done){
+		$p.attr('class', 'sm-ping sm-ping-wait').html('<strong>' + head + '</strong> - listening for answers... '
+			+ Object.keys(smPing.answers).length + ' so far').show();
+		return;
+	}
+	var v = pingVerdict(smPing);
+	var html = '<div class="sm-ping-title">' + (v.cls === 'none' ? '&#10007; ' : v.cls === 'relay' ? '&#8644; ' : '&#10003; ') + v.title + '</div>'
+		+ '<div class="sm-ping-detail">' + v.detail + '</div>';
+	var n = Object.keys(smPing.answers).length;
+	html += '<div class="sm-ping-meta">' + head + ' &middot; ' + n + ' answer' + (n === 1 ? '' : 's')
+		+ (smPing.lat === undefined ? ' &middot; no position, so no dot on the map' : '') + '</div>';
+	$p.attr('class', 'sm-ping sm-ping-' + v.cls).html(html).show();
+}
+
+// The device's answer to the last ping, for its row in the list.
+function pingRowHtml(key){
+	if(!smPing || !smPing.done) return '';
+	var a = smPing.answers[key];
+	if(!a) return '<div class="sm-row-detail text-muted">Ping #' + smPing.seq + ': no answer</div>';
+	var html = '<div class="sm-row-detail"><strong>Ping #' + smPing.seq + ':</strong> heard you at '
+		+ '<span class="sm-ping-' + signalClass(a.prssi) + '-text">R ' + a.prssi + ', SNR ' + Number(a.psnr).toFixed(1) + '</span>';
+	if(a.grssi !== undefined) html += ' &middot; hears Annabelle at <span class="sm-ping-' + signalClass(a.grssi) + '-text">R ' + a.grssi + '</span>';
+	return html + '</div>';
 }
