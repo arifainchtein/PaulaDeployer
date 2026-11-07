@@ -6,11 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.TimeZone;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
@@ -21,7 +17,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.digitalstables.pauladeployer.flash.FirmwareFlasher;
-import com.digitalstables.pauladeployer.utils.Constants;
+import com.digitalstables.pauladeployer.utils.FieldCaptures;
 import com.fazecast.jSerialComm.SerialPort;
 
 // Stream 2 Chat (2026-10-12): holds the target device's serial port open, sends a start command
@@ -36,12 +32,14 @@ import com.fazecast.jSerialComm.SerialPort;
 // a chatty device doesn't flood the chat with one message per line. The last RECENT_LINES lines
 // are kept for the webapp's live view.
 //
-// Stream to file (2026-10-13): every stream is also saved to LOG_DIR as <DeviceName>_<yyyy-MM-dd_HHmm>.txt
-// (device time zone), so out of WiFi range nothing is lost. Target FILE_ONLY skips the chat
+// Stream to file (2026-10-13): every stream is also saved, so out of WiFi range nothing is lost.
+// Since 2026-11-07 the files are field captures (FieldCaptures.KIND_STREAM_CHAT):
+// captures/streamchat/<yyyy-MM-dd_HHmmss>_<DeviceName>.txt (device time zone), browsable at /captures/
+// with the others; they used to be streamlogs/<DeviceName>_<yyyy-MM-dd_HHmm>.txt. Target FILE_ONLY skips the chat
 // altogether; a chat target that can't be reached at the start drops to file only instead of
 // failing. The name comes from the device's GetProductDefinition reply, sent before the start
 // command ("Device" if it doesn't answer, e.g. asleep). The page lists the files
-// (StreamToChatProcessingHandler action=logs) and StreamLogServlet serves them for download - from
+// (StreamToChatProcessingHandler action=logs) and CaptureServlet serves them for download - from
 // the phone they can then go to a chat through the photo upload page.
 public class SerialChatStreamer {
 
@@ -56,7 +54,6 @@ public class SerialChatStreamer {
 	private static final long COMMAND_GAP_MS = 1200;    // the device reads a command until 1 s of silence
 
 	public static final String FILE_ONLY = "File only";
-	public static final File LOG_DIR = new File(Constants.PAULAUPLOADER_HOME, "streamlogs");
 
 	private static final SerialChatStreamer INSTANCE = new SerialChatStreamer();
 	public static SerialChatStreamer get() { return INSTANCE; }
@@ -282,17 +279,11 @@ public class SerialChatStreamer {
 
 	private void openFile(String deviceName) {
 		try {
-			if (!LOG_DIR.isDirectory() && !LOG_DIR.mkdirs()) throw new IOException("cannot create " + LOG_DIR);
-			SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd_HHmm");
-			f.setTimeZone(TimeZone.getTimeZone(Constants.DEVICE_TIME_ZONE));
-			String base = deviceName + "_" + f.format(new Date());
-			File out = new File(LOG_DIR, base + ".txt");
-			for (int i = 2; out.exists(); i++) out = new File(LOG_DIR, base + "_" + i + ".txt");
+			File out = FieldCaptures.newFile(FieldCaptures.KIND_STREAM_CHAT, deviceName);
 			file = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(out), StandardCharsets.UTF_8));
 			synchronized (this) { fileName = out.getName(); }
-			SimpleDateFormat stamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
-			stamp.setTimeZone(TimeZone.getTimeZone(Constants.DEVICE_TIME_ZONE));   // the Pi's own zone is not set (Europe/London on Paula3)
-			writeFileLine("# Stream from " + deviceName + " on " + portName + ", started " + stamp.format(new Date())
+			// The device's time zone - the Pi's own zone is not set (Europe/London on Paula3).
+			writeFileLine("# Stream from " + deviceName + " on " + portName + ", started " + FieldCaptures.format("yyyy-MM-dd HH:mm:ss z")
 					+ (startCommand.isEmpty() ? "" : ", start command " + startCommand));
 		} catch (IOException e) {
 			file = null;
@@ -322,25 +313,12 @@ public class SerialChatStreamer {
 
 	// The saved logs, newest first: [{name, size, modified}].
 	public static JSONArray listLogs() {
-		JSONArray list = new JSONArray();
-		File[] files = LOG_DIR.listFiles((dir, name) -> name.endsWith(".txt"));
-		if (files == null) return list;
-		Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-		for (File f : files) {
-			JSONObject o = new JSONObject();
-			o.put("name", f.getName());
-			o.put("size", f.length());
-			o.put("modified", f.lastModified());
-			list.put(o);
-		}
-		return list;
+		return FieldCaptures.list(FieldCaptures.KIND_STREAM_CHAT);
 	}
 
-	// A log by its bare name, or null - never a path outside LOG_DIR.
+	// A log by its bare name, or null - never a path outside captures/streamchat.
 	public static File logFile(String name) {
-		if (name == null || !name.matches("[A-Za-z0-9_.-]+\\.txt") || name.startsWith(".")) return null;
-		File f = new File(LOG_DIR, name);
-		return f.isFile() ? f : null;
+		return FieldCaptures.find(FieldCaptures.KIND_STREAM_CHAT, name);
 	}
 
 	// Sends the waiting lines as one or more chat messages (each under MAX_MESSAGE_CHARS).

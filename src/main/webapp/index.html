@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/leaflet/leaflet.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.9.6">
+<link rel="stylesheet" href="css/style.css?v=0.9.7">
 </head>
 <body>
 
@@ -36,6 +36,7 @@
     <button id="test-i2c-temp-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test I2C Temp</button>
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
+    <button id="clipsal-uart-btn" type="button" class="btn btn-warning pd-toolbar-btn">Clipsal Uart</button>
     <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
@@ -107,6 +108,59 @@
     <button id="sniffer-toggle-btn" type="button" class="btn btn-info pd-copy-terminal-btn">Pause</button>
     <button id="sniffer-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
     <button id="sniffer-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
+  </div>
+</div>
+
+<!-- Clipsal Uart (2026-11-07, ClipsalUartProcessingHandler): wiring steps for a
+     ClipsallJunctionBoxWaterTrough board (HardwareDesign) on Paula's terminals, then Read Data -
+     Paula.ino's ReadClipsal reads the DYP-A02 UART ultrasonic (pin 18) and the DS18B20 (pin 33).
+     Terminal names are the board's own silkscreen. Leaving the screen sends StopClipsal. -->
+<div id="clipsal-screen" class="pd-screen" style="display:none;">
+  <div class="pd-terminal-title">Clipsal Uart <span class="pd-sniffer-status">Water trough + water temperature</span></div>
+  <div class="pd-clipsal-steps">
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">1</span>Jumpers</div>
+      <ul>
+        <li>Paula: both sensor jumpers (pin 18 and pin 33) on <strong>DIGITAL</strong>.</li>
+        <li>Clipsal: the <strong>J14</strong> jumper ("Jumper ON RS485 / Jumper OFF UART") <strong>OFF</strong>.</li>
+      </ul>
+    </div>
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">2</span>Paula to the Clipsal (the cable a Daffodil would use)</div>
+      <table class="table table-sm pd-clipsal-table">
+        <thead><tr><th>Paula</th><th>Clipsal terminal</th></tr></thead>
+        <tbody>
+          <tr><td>V50</td><td>J5 <strong>V50</strong></td></tr>
+          <tr><td>GND</td><td>J5 <strong>GND</strong></td></tr>
+          <tr><td>pin 18</td><td>J2 <strong>18</strong> (the middle screw)</td></tr>
+          <tr><td>pin 33</td><td>J2 <strong>TEMP</strong> (marked 33)</td></tr>
+          <tr><td class="text-muted">nothing</td><td>J2 <strong>B</strong>: leave it empty. It's only for RS485, and an empty B keeps the ultrasonic in automatic UART mode.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">3</span>Sensors to the Clipsal</div>
+      <table class="table table-sm pd-clipsal-table">
+        <thead><tr><th>Sensor</th><th>Clipsal terminal</th></tr></thead>
+        <tbody>
+          <tr><td>Ultrasonic (DYP-A02, UART)</td><td>Plug into the <strong>Grove</strong> socket (J7)</td></tr>
+          <tr><td>DS18B20 red (+)</td><td>J1 <strong>V50</strong></td></tr>
+          <tr><td>DS18B20 black (&minus;)</td><td>J1 <strong>GND</strong></td></tr>
+          <tr><td>DS18B20 data (usually yellow)</td><td>J1 <strong>TEMP</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <button id="clipsal-read-btn" type="button" class="btn btn-warning w-100 pd-clipsal-read-btn">Read Data</button>
+  <div class="pd-clipsal-tiles">
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Distance</div><div id="clipsal-distance" class="pd-clipsal-tile-value">&ndash;</div></div>
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Water temperature</div><div id="clipsal-temp" class="pd-clipsal-tile-value">&ndash;</div></div>
+  </div>
+  <div id="clipsal-hint" class="pd-clipsal-hint"></div>
+  <pre id="clipsal-output" class="pd-terminal pd-clipsal-log"></pre>
+  <div class="pd-terminal-buttons">
+    <button id="clipsal-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
+    <button id="clipsal-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
   </div>
 </div>
 
@@ -340,7 +394,7 @@
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
 <script src="assets/leaflet/leaflet.js"></script>
-<script src="js/app.js?v=0.9.6"></script>
-<script src="js/signalmap.js?v=0.9.6"></script>
+<script src="js/app.js?v=0.9.7"></script>
+<script src="js/signalmap.js?v=0.9.7"></script>
 </body>
 </html>

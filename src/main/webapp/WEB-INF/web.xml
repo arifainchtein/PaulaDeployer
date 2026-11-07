@@ -19,16 +19,6 @@
     <url-pattern>/PaulaDeployerServlet</url-pattern>
   </servlet-mapping>
 
-  <!-- Stream 2 Chat log files (2026-10-13): /streamlogs/<name>.txt -->
-  <servlet>
-    <servlet-name>StreamLogServlet</servlet-name>
-    <servlet-class>com.digitalstables.pauladeployer.servlet.StreamLogServlet</servlet-class>
-  </servlet>
-  <servlet-mapping>
-    <servlet-name>StreamLogServlet</servlet-name>
-    <url-pattern>/streamlogs/*</url-pattern>
-  </servlet-mapping>
-
   <!-- Field captures (2026-10-24): /captures/ lists them, /captures/<kind>/<name>.txt is one -->
   <servlet>
     <servlet-name>CaptureServlet</servlet-name>

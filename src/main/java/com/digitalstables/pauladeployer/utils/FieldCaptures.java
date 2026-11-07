@@ -26,6 +26,7 @@ public class FieldCaptures {
 	public static final File ROOT = new File(Constants.PAULAUPLOADER_HOME, "captures");
 	public static final String KIND_LORA_SNIFFER = "lorasniffer";
 	public static final String KIND_FIRMWARE_UPLOAD = "firmwareupload";
+	public static final String KIND_STREAM_CHAT = "streamchat";   // Stream 2 Chat sessions (SerialChatStreamer), 2026-11-07
 
 	private static final String NAME_PATTERN = "[A-Za-z0-9_.-]+";
 
@@ -68,21 +69,25 @@ public class FieldCaptures {
 		JSONObject kinds = new JSONObject();
 		File[] dirs = ROOT.listFiles(File::isDirectory);
 		if (dirs == null) return kinds;
-		for (File dir : dirs) {
-			File[] files = dir.listFiles((d, name) -> name.endsWith(".txt"));
-			if (files == null) continue;
-			Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-			JSONArray list = new JSONArray();
-			for (File f : files) {
-				JSONObject o = new JSONObject();
-				o.put("name", f.getName());
-				o.put("size", f.length());
-				o.put("modified", f.lastModified());
-				list.put(o);
-			}
-			kinds.put(dir.getName(), list);
-		}
+		for (File dir : dirs) kinds.put(dir.getName(), list(dir.getName()));
 		return kinds;
+	}
+
+	// One kind's captures, newest first: [{name, size, modified}] (empty if none or a bad kind).
+	public static JSONArray list(String kind) {
+		JSONArray list = new JSONArray();
+		if (kind == null || !kind.matches(NAME_PATTERN) || kind.startsWith(".")) return list;
+		File[] files = new File(ROOT, kind).listFiles((d, name) -> name.endsWith(".txt"));
+		if (files == null) return list;
+		Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+		for (File f : files) {
+			JSONObject o = new JSONObject();
+			o.put("name", f.getName());
+			o.put("size", f.length());
+			o.put("modified", f.lastModified());
+			list.put(o);
+		}
+		return list;
 	}
 
 	// A capture by kind and bare name, or null - never a path outside ROOT.

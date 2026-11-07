@@ -23,7 +23,7 @@ import com.digitalstables.pauladeployer.utils.Utils;
 //   start         - target=<participant>, command=<sent to the device first, default debug#1>
 //   stop          - stop streaming and release the serial port
 //   status        - running, counters, last error and the most recent lines (polled by the page)
-//   logs          - the saved stream files, newest first (2026-10-13; downloaded through StreamLogServlet)
+//   logs          - the saved stream files, newest first (2026-10-13; in captures/streamchat since 2026-11-07, downloaded through CaptureServlet)
 //   deleteLog     - name=<file>
 // See SerialChatStreamer.
 public class StreamToChatProcessingHandler extends ProcessingFormHandler {

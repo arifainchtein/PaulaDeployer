@@ -748,6 +748,52 @@ $(function(){
 		$('#main-screen').show();
 	});
 
+	// "Clipsal Uart" (2026-11-07) - see ClipsalUartProcessingHandler. Wiring steps for a
+	// ClipsallJunctionBoxWaterTrough board on Paula's terminals, then one ReadClipsal per Read Data
+	// press (ultrasonic on pin 18 + DS18B20 on pin 33). Return sends StopClipsal so 18/33 go back
+	// to the flow sensors.
+	$('#clipsal-uart-btn').on('click', function(){
+		$('#main-screen').hide();
+		$('#clipsal-screen').show();
+		$('#clipsal-output').text('');
+		$('#clipsal-distance, #clipsal-temp').removeClass('pd-clipsal-bad').html('&ndash;');
+		$('#clipsal-hint').text('');
+		$('#clipsal-read-btn').prop('disabled', false).text('Read Data');
+		window.scrollTo(0, 0);
+	});
+	$('#clipsal-read-btn').on('click', function(){
+		var btn = $(this);
+		btn.prop('disabled', true).text('Reading...');
+		$.ajax({
+			url: "PaulaDeployerServlet",
+			type: "POST",
+			data: {formName: "ClipsalUart", action: "read"},
+			dataType: "json",
+			success: function(result){
+				btn.prop('disabled', false).text('Read Data');
+				var time = new Date().toLocaleTimeString();
+				if(result[STATUS_KEY] != STATUS_SUCCESS){
+					$('#clipsal-hint').text(result[DATA_KEY]);
+					appendClipsalLog(time + '  ' + result[DATA_KEY]);
+					return;
+				}
+				showClipsalReading(JSON.parse(result[DATA_KEY]), time);
+			},
+			error: function(){
+				btn.prop('disabled', false).text('Read Data');
+				$('#clipsal-hint').text('Request failed - is Paula plugged in?');
+			}
+		});
+	});
+	$('#clipsal-copy-btn').on('click', function(){
+		copyTextToClipboard($('#clipsal-output').text(), $(this));
+	});
+	$('#clipsal-return-btn').on('click', function(){
+		$.ajax({url: "PaulaDeployerServlet", type: "POST", data: {formName: "ClipsalUart", action: "stop"}, dataType: "json"});
+		$('#clipsal-screen').hide();
+		$('#main-screen').show();
+	});
+
 	$('#return-btn').on('click', function(){
 		stopPolling();
 		$('#terminal-screen').hide();
@@ -1165,7 +1211,7 @@ function loadStreamLogs(){
 			logs.forEach(function(l){
 				var kb = l.size < 1024 ? l.size + ' B' : Math.round(l.size / 1024) + ' KB';
 				$logs.append($('<div class="d-flex align-items-center" style="gap:8px;padding:3px 0;border-bottom:1px solid #eee;">')
-					.append($('<a style="flex:1;word-break:break-all;" download>').attr('href', 'streamlogs/' + encodeURIComponent(l.name)).text(l.name))
+					.append($('<a style="flex:1;word-break:break-all;" download>').attr('href', 'captures/streamchat/' + encodeURIComponent(l.name) + '?download').text(l.name))
 					.append($('<span class="text-muted" style="white-space:nowrap;">').text(kb))
 					.append($('<button type="button" class="btn btn-outline-danger btn-sm stream-log-delete">').attr('data-name', l.name).html('&times;')));
 			});
@@ -1396,4 +1442,38 @@ function appendSnifferHtml(html){
 	var wasScrolledToBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
 	el.insertAdjacentHTML('beforeend', html + '\n');
 	if(wasScrolledToBottom) el.scrollTop = el.scrollHeight;
+}
+
+// Clipsal Uart (2026-11-07): one ReadClipsal answer - {distanceMM, ultrasonicOk, tempC, tempProbes}.
+// tempC is -99 when no probe answered. What to check when a sensor gives nothing.
+function showClipsalReading(r, time){
+	var hints = [];
+	var distance = 'no data', temp = 'no data';
+	if(r.ultrasonicOk == 1){
+		distance = (r.distanceMM / 10).toFixed(1) + ' cm';
+		$('#clipsal-distance').removeClass('pd-clipsal-bad').text(distance);
+		if(r.distanceMM == 0) hints.push('Ultrasonic sends 0 mm: nothing in range, or the target is closer than ~3 cm.');
+	}else{
+		$('#clipsal-distance').addClass('pd-clipsal-bad').text('no data');
+		hints.push('No ultrasonic data: check the Grove plug, the Paula pin 18 to J2 "18" wire, that J14 is OFF and nothing is in J2 "B", and that Paula\'s pin 18 jumper is on DIGITAL.');
+	}
+	if(r.tempProbes > 0 && r.tempC != -99){
+		temp = Number(r.tempC).toFixed(2) + ' °C';
+		$('#clipsal-temp').removeClass('pd-clipsal-bad').text(temp);
+		if(r.tempC == 85) hints.push('85 °C is the DS18B20\'s power-on value - press Read Data again.');
+	}else{
+		$('#clipsal-temp').addClass('pd-clipsal-bad').text(r.tempProbes > 0 ? 'read failed' : 'no probe');
+		temp = r.tempProbes > 0 ? 'read failed' : 'no probe';
+		hints.push(r.tempProbes > 0
+			? 'A DS18B20 was found but its reading failed - check the data wire in J1 "TEMP".'
+			: 'No DS18B20 found: check its three wires in J1 (red V50, black GND, data TEMP), the Paula pin 33 to J2 "TEMP" wire, and that Paula\'s pin 33 jumper is on DIGITAL.');
+	}
+	$('#clipsal-hint').text(hints.join(' '));
+	appendClipsalLog(time + '  distance ' + distance + '   water ' + temp);
+}
+
+function appendClipsalLog(line){
+	var out = $('#clipsal-output');
+	out.text(out.text() + (out.text() ? '\n' : '') + line);
+	out.scrollTop(out[0].scrollHeight);
 }

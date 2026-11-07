@@ -361,3 +361,21 @@ html, body {
 .sm-ping-answers { margin: 6px 0 0 0; padding-left: 18px; font-size: 13px; }
 .sm-ping-answers li { margin: 2px 0; }
 .pd-inspect-ports { padding-left: 18px; font-size: 13px; margin-bottom: 12px; word-break: break-word; }
+
+/* Clipsal Uart screen (2026-11-07) */
+.pd-clipsal-steps { margin-bottom: 12px; }
+.pd-clipsal-step { border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }
+.pd-clipsal-step ul { margin: 0; padding-left: 18px; }
+.pd-clipsal-step-title { font-weight: 700; margin-bottom: 6px; }
+.pd-clipsal-num { display: inline-block; width: 22px; height: 22px; line-height: 22px; border-radius: 50%; background: #ffc107; color: #212529; text-align: center; font-size: 13px; margin-right: 8px; }
+.pd-clipsal-table { margin: 0; font-size: 14px; }
+.pd-clipsal-table td:first-child { white-space: nowrap; }
+.pd-clipsal-read-btn { font-size: 18px; font-weight: 600; padding: 12px; margin-bottom: 10px; }
+.pd-clipsal-tiles { display: flex; gap: 8px; margin-bottom: 8px; }
+.pd-clipsal-tile { flex: 1; border: 1px solid #dee2e6; border-radius: 8px; padding: 8px 10px; text-align: center; }
+.pd-clipsal-tile-label { font-size: 13px; color: #6c757d; }
+.pd-clipsal-tile-value { font-size: 24px; font-weight: 700; }
+.pd-clipsal-tile-value.pd-clipsal-bad { color: #c92a2a; font-size: 16px; padding-top: 6px; }
+.pd-clipsal-hint { font-size: 13px; color: #c92a2a; margin-bottom: 8px; }
+.pd-clipsal-hint:empty { display: none; }
+#clipsal-output.pd-clipsal-log { height: 150px; min-height: 0; }
