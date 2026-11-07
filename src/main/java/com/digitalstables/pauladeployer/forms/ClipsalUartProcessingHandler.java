@@ -21,6 +21,10 @@ import com.digitalstables.pauladeployer.utils.Utils;
 //   action=read -> ReadClipsal  -> {"distanceMM","ultrasonicOk","tempC","tempProbes","raw"}
 //   action=read2us -> ReadClipsal2US -> {"distance1MM","ultrasonic1Ok","distance2MM","ultrasonic2Ok","raw"}
 //                    ("Clipsal 2US", ClipsallJunctionBoxWaterTrough_2US: two DYP-A02s on 18 and 33)
+//   action=readvm -> ReadVoltageMonitor -> {"inaFound","manufacturerId","deviceId","vbusV","vshuntMV",
+//                    "inaDieTempC","ntcV","v50V","raw"} ("Clipsal Voltage Monitor", Clipsall_VoltageMonitor:
+//                    INA228 at 0x4F on I2C, battery NTC on the pin-33 terminal as analog, AIN0). Current and NTC
+//                    temperature are worked out on the page, from the shunt and NTC values typed there.
 //   action=stop -> StopClipsal  (pins 18/33 back to the flow sensors; sent when leaving either screen)
 // Goes through PaulaRadio, not SendCommand's target port: it always talks to Paula even when a
 // target device is plugged in too, and keeps the port open so Paula isn't reset by every read.
@@ -46,7 +50,8 @@ public class ClipsalUartProcessingHandler extends ProcessingFormHandler{
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", "{}");
 			}
 
-			String paulaCommand = "read2us".equals(action) ? "ReadClipsal2US" : "ReadClipsal";
+			String paulaCommand = "read2us".equals(action) ? "ReadClipsal2US" : "readvm".equals(action) ? "ReadVoltageMonitor" : "ReadClipsal";
+			String minimumVersion = "read2us".equals(action) ? "5" : "readvm".equals(action) ? "7" : "4";
 			String reply = PaulaRadio.get().command(paulaCommand, TIMEOUT_MILLISECONDS);
 			if(reply == null){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in?");
@@ -55,12 +60,18 @@ public class ClipsalUartProcessingHandler extends ProcessingFormHandler{
 				// e.g. "Failure-Command Not Found-ReadClipsal2US": Paula's firmware is too old (ReadClipsal
 				// came in version 4, ReadClipsal2US in 5). An old v4 answers ReadClipsal2US as ReadClipsal.
 				boolean old = reply.contains("Command Not Found") || reply.contains("Ok-ReadClipsal");
-				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", old ? "Paula's firmware doesn't know " + paulaCommand + " - flash Paula.ino version " + ("read2us".equals(action) ? "5" : "4") + " or later." : reply);
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", old ? "Paula's firmware doesn't know " + paulaCommand + " - flash Paula.ino version " + minimumVersion + " or later." : reply);
+			}
+			// Paula v6 answered ReadVoltageMonitor too, but read the NTC on AIN1 (pin 18); v7 reads AIN0
+			// (pin 33, as the board's spec says) and says so with ntcAin=0.
+			if("readvm".equals(action) && !reply.contains("ntcAin=0")){
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula's firmware reads the NTC on the wrong channel - flash Paula.ino version 7 or later.");
 			}
 			JSONObject data = new JSONObject();
 			data.put("raw", reply);
 			for(String line : reply.split("\n")){
-				if(!line.startsWith("distance")) continue;
+				// only the reading line - Paula also prints LoRa debug ("rssi= ... snr=...") in between
+				if(!line.startsWith("distance") && !line.startsWith("inaFound")) continue;
 				for(String pair : line.trim().split(" ")){
 					int eq = pair.indexOf('=');
 					if(eq <= 0) continue;

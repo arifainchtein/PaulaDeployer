@@ -378,4 +378,10 @@ html, body {
 .pd-clipsal-tile-value.pd-clipsal-bad { color: #c92a2a; font-size: 16px; padding-top: 6px; }
 .pd-clipsal-hint { font-size: 13px; color: #c92a2a; margin-bottom: 8px; }
 .pd-clipsal-hint:empty { display: none; }
-#clipsal-output.pd-clipsal-log, #clipsal2us-output.pd-clipsal-log { height: 150px; min-height: 0; }
+#clipsal-output.pd-clipsal-log, #clipsal2us-output.pd-clipsal-log, #clipsalvm-output.pd-clipsal-log { height: 150px; min-height: 0; }
+.pd-clipsalvm-settings { display: flex; gap: 8px; margin-bottom: 10px; }
+.pd-clipsalvm-settings label { flex: 1; font-size: 13px; color: #495057; }
+.pd-clipsalvm-detail { font-size: 12.5px; color: #495057; margin-bottom: 6px; }
+.pd-clipsalvm-detail:empty { display: none; }
+.pd-clipsalvm-presets { display: flex; flex-direction: column; gap: 4px; justify-content: flex-end; }
+.pd-clipsalvm-presets .btn { font-size: 12px; padding: 2px 6px; white-space: nowrap; }

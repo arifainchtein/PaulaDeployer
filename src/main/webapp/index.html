@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/leaflet/leaflet.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.9.8">
+<link rel="stylesheet" href="css/style.css?v=0.9.9">
 </head>
 <body>
 
@@ -38,6 +38,7 @@
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
     <button id="clipsal-uart-btn" type="button" class="btn btn-warning pd-toolbar-btn">Clipsal Uart</button>
     <button id="clipsal-2us-btn" type="button" class="btn btn-warning pd-toolbar-btn">Clipsal 2US</button>
+    <button id="clipsal-vm-btn" type="button" class="btn btn-warning pd-toolbar-btn">Clipsal Voltage Monitor</button>
     <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
@@ -211,6 +212,72 @@
   <div class="pd-terminal-buttons">
     <button id="clipsal2us-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
     <button id="clipsal2us-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
+  </div>
+</div>
+
+<!-- Clipsal Voltage Monitor (2026-11-07, ClipsalUartProcessingHandler action=readvm): a
+     Clipsall_VoltageMonitor board - INA228 (0x4F) on Paula's I2C terminal for battery voltage and shunt
+     current (shunt in the battery negative lead), and the battery NTC divider (J2 TEMP) on Paula's pin-33
+     terminal as analog (JP5, ADS1115 AIN0) - as the board's spec has it for Daffodil.
+     Terminal names are both boards' silkscreen (Paula = Daffodil shield: J2 "V50 GND", J5 "SDA SCL",
+     "18 GPIO 33", "18 Digital Analog"). -->
+<div id="clipsalvm-screen" class="pd-screen" style="display:none;">
+  <div class="pd-terminal-title">Clipsal Voltage Monitor <span class="pd-sniffer-status">Battery voltage, current, temperature</span></div>
+  <div class="pd-clipsal-steps">
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">1</span>Jumpers</div>
+      <ul>
+        <li>Paula: the <strong>33</strong> jumper on <strong>ANALOG</strong> (JP5 on a Daffodil). The battery temperature is a voltage, read by the ADS1115 on AIN0.</li>
+        <li>Monitor JP1 (solder jumper): bridge it <strong>only</strong> when Paula is <strong>not</strong> powered from the battery being measured. If Paula runs from that battery, leave it open, or current bypasses the shunt.</li>
+      </ul>
+    </div>
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">2</span>Paula to the monitor</div>
+      <table class="table table-sm pd-clipsal-table">
+        <thead><tr><th>Paula</th><th>Monitor terminal</th></tr></thead>
+        <tbody>
+          <tr><td>J2 V50</td><td>J1 <strong>V50</strong></td></tr>
+          <tr><td>J2 GND</td><td>J1 <strong>GND</strong></td></tr>
+          <tr><td>J5 SDA</td><td>J2 <strong>SDA</strong></td></tr>
+          <tr><td>J5 SCL</td><td>J2 <strong>SCL</strong></td></tr>
+          <tr><td>sensor screw 33</td><td>J2 <strong>TEMP</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">3</span>Battery, shunt and NTC to the monitor</div>
+      <table class="table table-sm pd-clipsal-table">
+        <thead><tr><th>From</th><th>Monitor terminal</th></tr></thead>
+        <tbody>
+          <tr><td>Battery + (through an inline fuse at the battery)</td><td>J3 <strong>VBAT</strong> (12, 24 or 48 V; max 85 V)</td></tr>
+          <tr><td>Battery &minus;</td><td>J3 <strong>BAT_REF</strong></td></tr>
+          <tr><td>Shunt in the battery <strong>negative</strong> lead, Kelvin sense wires</td><td>J4 <strong>I+</strong> to the shunt's load/system side, <strong>I&minus;</strong> to its battery &minus; side, so discharge reads positive (optional - without a shunt the current reads about 0)</td></tr>
+          <tr><td>10k NTC (either way round)</td><td>J5 <strong>NTC</strong> and <strong>GND</strong></td></tr>
+        </tbody>
+      </table>
+      <div class="pd-reminder mt-2 mb-0">Never put the battery on J5: J5 feeds TEMP, which goes straight into Paula's ADS1115.</div>
+    </div>
+  </div>
+  <div class="pd-clipsalvm-settings">
+    <label>Shunt (m&Omega;) <input type="number" id="clipsalvm-shunt" class="form-control form-control-sm" step="any" min="0" placeholder="e.g. 0.75"></label>
+    <div class="pd-clipsalvm-presets">
+      <button type="button" class="btn btn-sm btn-outline-secondary clipsalvm-preset-btn" data-mohm="0.15">500A/75mV</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary clipsalvm-preset-btn" data-mohm="0.75">100A/75mV</button>
+    </div>
+    <label>NTC beta <input type="number" id="clipsalvm-beta" class="form-control form-control-sm" step="1" min="1" value="3950"></label>
+  </div>
+  <button id="clipsalvm-read-btn" type="button" class="btn btn-warning w-100 pd-clipsal-read-btn">Read Data</button>
+  <div class="pd-clipsal-tiles">
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Battery</div><div id="clipsalvm-voltage" class="pd-clipsal-tile-value">&ndash;</div></div>
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Current</div><div id="clipsalvm-current" class="pd-clipsal-tile-value">&ndash;</div></div>
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Battery temp</div><div id="clipsalvm-temp" class="pd-clipsal-tile-value">&ndash;</div></div>
+  </div>
+  <div id="clipsalvm-detail" class="pd-clipsalvm-detail"></div>
+  <div id="clipsalvm-hint" class="pd-clipsal-hint"></div>
+  <pre id="clipsalvm-output" class="pd-terminal pd-clipsal-log"></pre>
+  <div class="pd-terminal-buttons">
+    <button id="clipsalvm-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
+    <button id="clipsalvm-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
   </div>
 </div>
 
@@ -444,7 +511,7 @@
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
 <script src="assets/leaflet/leaflet.js"></script>
-<script src="js/app.js?v=0.9.8"></script>
-<script src="js/signalmap.js?v=0.9.8"></script>
+<script src="js/app.js?v=0.9.9"></script>
+<script src="js/signalmap.js?v=0.9.9"></script>
 </body>
 </html>

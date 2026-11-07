@@ -838,6 +838,61 @@ $(function(){
 		$('#main-screen').show();
 	});
 
+	// "Clipsal Voltage Monitor" (2026-11-07) - ClipsalUartProcessingHandler action=readvm. The shunt
+	// value and NTC beta typed on the screen are kept in this phone's browser (localStorage).
+	$('#clipsal-vm-btn').on('click', function(){
+		$('#main-screen').hide();
+		$('#clipsalvm-screen').show();
+		$('#clipsalvm-output').text('');
+		$('#clipsalvm-voltage, #clipsalvm-current, #clipsalvm-temp').removeClass('pd-clipsal-bad').html('&ndash;');
+		$('#clipsalvm-hint, #clipsalvm-detail').text('');
+		$('#clipsalvm-read-btn').prop('disabled', false).text('Read Data');
+		try{
+			var shunt = localStorage.getItem('clipsalvm-shunt'), beta = localStorage.getItem('clipsalvm-beta');
+			if(shunt !== null) $('#clipsalvm-shunt').val(shunt);
+			if(beta !== null) $('#clipsalvm-beta').val(beta);
+		}catch(e){}
+		window.scrollTo(0, 0);
+	});
+	// the two shunts the board's spec names: 75 mV / 500 A = 0.15 mOhm (caravan), 75 mV / 100 A = 0.75 mOhm
+	$('.clipsalvm-preset-btn').on('click', function(){
+		$('#clipsalvm-shunt').val($(this).data('mohm')).trigger('change');
+	});
+	$('#clipsalvm-shunt, #clipsalvm-beta').on('change', function(){
+		try{ localStorage.setItem(this.id, $(this).val()); }catch(e){}
+	});
+	$('#clipsalvm-read-btn').on('click', function(){
+		var btn = $(this);
+		btn.prop('disabled', true).text('Reading...');
+		$.ajax({
+			url: "PaulaDeployerServlet",
+			type: "POST",
+			data: {formName: "ClipsalUart", action: "readvm"},
+			dataType: "json",
+			success: function(result){
+				btn.prop('disabled', false).text('Read Data');
+				var time = new Date().toLocaleTimeString();
+				if(result[STATUS_KEY] != STATUS_SUCCESS){
+					$('#clipsalvm-hint').text(result[DATA_KEY]);
+					appendLogLine('#clipsalvm-output', time + '  ' + result[DATA_KEY]);
+					return;
+				}
+				showVoltageMonitorReading(JSON.parse(result[DATA_KEY]), time);
+			},
+			error: function(){
+				btn.prop('disabled', false).text('Read Data');
+				$('#clipsalvm-hint').text('Request failed - is Paula plugged in?');
+			}
+		});
+	});
+	$('#clipsalvm-copy-btn').on('click', function(){
+		copyTextToClipboard($('#clipsalvm-output').text(), $(this));
+	});
+	$('#clipsalvm-return-btn').on('click', function(){
+		$('#clipsalvm-screen').hide();
+		$('#main-screen').show();
+	});
+
 	$('#return-btn').on('click', function(){
 		stopPolling();
 		$('#terminal-screen').hide();
@@ -1534,6 +1589,65 @@ function showClipsal2USReading(r, time){
 	});
 	$('#clipsal2us-hint').text(hints.join(' '));
 	appendLogLine('#clipsal2us-output', time + '  ' + texts.join('   '));
+}
+
+// Clipsal Voltage Monitor: {inaFound, vbusV, vshuntMV, inaDieTempC, ntcV, v50V} from Paula.
+// Current = shunt voltage / shunt resistance. NTC: the board's divider is V50 - 5.23k - node, node -
+// (NTC || 30.1k) - GND, then 1k to TEMP (no load from the ADS1115, so TEMP = node voltage).
+// V50 comes from AIN3 (V50_I) when it looks like a 5 V rail, else 5.0 V is assumed.
+function showVoltageMonitorReading(r, time){
+	var hints = [], details = [], log = [];
+	if(r.inaFound == 1 && r.vbusV != -99){
+		var v = Number(r.vbusV).toFixed(2) + ' V';
+		$('#clipsalvm-voltage').removeClass('pd-clipsal-bad').text(v);
+		log.push('battery ' + v);
+		details.push('shunt ' + Number(r.vshuntMV).toFixed(3) + ' mV', 'INA228 chip ' + Number(r.inaDieTempC).toFixed(1) + ' \u00B0C');
+		if(r.vbusV < 0.5) hints.push('Battery reads ~0 V: check VBAT/BAT_REF on J3 and the fuse, and that battery \u2212 shares GND with Paula (through the shunt, or JP1 when Paula has its own supply).');
+		var shunt = parseFloat($('#clipsalvm-shunt').val());
+		if(shunt > 0){
+			var amps = r.vshuntMV / shunt;
+			var a = (Math.abs(amps) < 10 ? amps.toFixed(3) : amps.toFixed(1)) + ' A';
+			$('#clipsalvm-current').removeClass('pd-clipsal-bad').text(a);
+			log.push('current ' + a);
+		}else{
+			$('#clipsalvm-current').addClass('pd-clipsal-bad').text('enter shunt');
+			log.push('shunt ' + Number(r.vshuntMV).toFixed(3) + ' mV');
+		}
+		if(Math.abs(r.vshuntMV) > 160) hints.push('Shunt voltage is at the INA228\'s \u00B1163.84 mV limit - the current is off the scale.');
+	}else{
+		$('#clipsalvm-voltage, #clipsalvm-current').addClass('pd-clipsal-bad').text('no INA228');
+		log.push('INA228 not found');
+		hints.push('INA228 not found at 0x4F: check Paula J5 SDA/SCL to the monitor\'s J2 SDA/SCL (not swapped), and V50/GND on J1.');
+	}
+	if(r.ntcV != -99){
+		var v50 = (r.v50V >= 4.5 && r.v50V <= 5.6) ? Number(r.v50V) : 5.0;
+		var vt = Number(r.ntcV), beta = parseFloat($('#clipsalvm-beta').val()) || 3950;
+		details.push('TEMP ' + vt.toFixed(3) + ' V of ' + v50.toFixed(2) + ' V');
+		if(vt < 0.05){
+			$('#clipsalvm-temp').addClass('pd-clipsal-bad').text('0 V');
+			hints.push('TEMP reads 0 V: check the Paula 33 to J2 TEMP wire, and that Paula\'s 33 jumper is on ANALOG.');
+			log.push('NTC 0 V');
+		}else if(vt >= v50 * 0.83){
+			// open NTC: the node sits at V50 x 30.1k / (5.23k + 30.1k) = 0.85 x V50
+			$('#clipsalvm-temp').addClass('pd-clipsal-bad').text('no NTC');
+			hints.push('No NTC on J5 (TEMP reads the open-circuit ' + vt.toFixed(2) + ' V).');
+			log.push('no NTC');
+		}else{
+			var rp = 5230 * vt / (v50 - vt);
+			var rntc = 1 / (1 / rp - 1 / 30100);
+			var tc = 1 / (1 / 298.15 + Math.log(rntc / 10000) / beta) - 273.15;
+			var t = tc.toFixed(1) + ' \u00B0C';
+			$('#clipsalvm-temp').removeClass('pd-clipsal-bad').text(t);
+			details.push('NTC ' + (rntc / 1000).toFixed(2) + ' k\u03A9');
+			log.push('battery temp ' + t);
+		}
+	}else{
+		$('#clipsalvm-temp').addClass('pd-clipsal-bad').text('no ADS1115');
+		hints.push('Paula\'s ADS1115 didn\'t answer.');
+	}
+	$('#clipsalvm-detail').text(details.join(' \u00B7 '));
+	$('#clipsalvm-hint').text(hints.join(' '));
+	appendLogLine('#clipsalvm-output', time + '  ' + log.join('   '));
 }
 
 function appendLogLine(selector, line){
