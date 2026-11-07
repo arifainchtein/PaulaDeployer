@@ -19,7 +19,9 @@ import com.digitalstables.pauladeployer.utils.Utils;
 // waterproof DS18B20 (J1 screw terminal, pin 33). The board is wired to Paula's own terminals, as it
 // would be to a Daffodil, and Paula.ino reads both sensors.
 //   action=read -> ReadClipsal  -> {"distanceMM","ultrasonicOk","tempC","tempProbes","raw"}
-//   action=stop -> StopClipsal  (pins 18/33 back to the flow sensors; sent when leaving the screen)
+//   action=read2us -> ReadClipsal2US -> {"distance1MM","ultrasonic1Ok","distance2MM","ultrasonic2Ok","raw"}
+//                    ("Clipsal 2US", ClipsallJunctionBoxWaterTrough_2US: two DYP-A02s on 18 and 33)
+//   action=stop -> StopClipsal  (pins 18/33 back to the flow sensors; sent when leaving either screen)
 // Goes through PaulaRadio, not SendCommand's target port: it always talks to Paula even when a
 // target device is plugged in too, and keeps the port open so Paula isn't reset by every read.
 public class ClipsalUartProcessingHandler extends ProcessingFormHandler{
@@ -44,18 +46,21 @@ public class ClipsalUartProcessingHandler extends ProcessingFormHandler{
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", "{}");
 			}
 
-			String reply = PaulaRadio.get().command("ReadClipsal", TIMEOUT_MILLISECONDS);
+			String paulaCommand = "read2us".equals(action) ? "ReadClipsal2US" : "ReadClipsal";
+			String reply = PaulaRadio.get().command(paulaCommand, TIMEOUT_MILLISECONDS);
 			if(reply == null){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in?");
 			}
-			if(!reply.contains("Ok-ReadClipsal")){
-				// e.g. "Failure-Command Not Found-ReadClipsal": Paula has firmware older than version 4
-				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", reply.contains("Command Not Found") ? "Paula's firmware doesn't know ReadClipsal - flash Paula.ino version 4 or later." : reply);
+			if(!reply.contains("Ok-" + paulaCommand)){
+				// e.g. "Failure-Command Not Found-ReadClipsal2US": Paula's firmware is too old (ReadClipsal
+				// came in version 4, ReadClipsal2US in 5). An old v4 answers ReadClipsal2US as ReadClipsal.
+				boolean old = reply.contains("Command Not Found") || reply.contains("Ok-ReadClipsal");
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", old ? "Paula's firmware doesn't know " + paulaCommand + " - flash Paula.ino version " + ("read2us".equals(action) ? "5" : "4") + " or later." : reply);
 			}
 			JSONObject data = new JSONObject();
 			data.put("raw", reply);
 			for(String line : reply.split("\n")){
-				if(!line.startsWith("distanceMM=")) continue;
+				if(!line.startsWith("distance")) continue;
 				for(String pair : line.trim().split(" ")){
 					int eq = pair.indexOf('=');
 					if(eq <= 0) continue;
@@ -67,7 +72,7 @@ public class ClipsalUartProcessingHandler extends ProcessingFormHandler{
 					}
 				}
 			}
-			logger.info("ReadClipsal: " + data.toString());
+			logger.info(paulaCommand + ": " + data.toString());
 			return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 		}catch(Exception e){
 			logger.warn(Utils.getStringException(e));

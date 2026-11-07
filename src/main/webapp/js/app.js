@@ -794,6 +794,50 @@ $(function(){
 		$('#main-screen').show();
 	});
 
+	// "Clipsal 2US" (2026-11-07) - ClipsalUartProcessingHandler action=read2us: two DYP-A02s on a
+	// ClipsallJunctionBoxWaterTrough_2US board, left Grove on pin 18, right Grove on pin 33.
+	$('#clipsal-2us-btn').on('click', function(){
+		$('#main-screen').hide();
+		$('#clipsal2us-screen').show();
+		$('#clipsal2us-output').text('');
+		$('#clipsal2us-distance1, #clipsal2us-distance2').removeClass('pd-clipsal-bad').html('&ndash;');
+		$('#clipsal2us-hint').text('');
+		$('#clipsal2us-read-btn').prop('disabled', false).text('Read Data');
+		window.scrollTo(0, 0);
+	});
+	$('#clipsal2us-read-btn').on('click', function(){
+		var btn = $(this);
+		btn.prop('disabled', true).text('Reading...');
+		$.ajax({
+			url: "PaulaDeployerServlet",
+			type: "POST",
+			data: {formName: "ClipsalUart", action: "read2us"},
+			dataType: "json",
+			success: function(result){
+				btn.prop('disabled', false).text('Read Data');
+				var time = new Date().toLocaleTimeString();
+				if(result[STATUS_KEY] != STATUS_SUCCESS){
+					$('#clipsal2us-hint').text(result[DATA_KEY]);
+					appendLogLine('#clipsal2us-output', time + '  ' + result[DATA_KEY]);
+					return;
+				}
+				showClipsal2USReading(JSON.parse(result[DATA_KEY]), time);
+			},
+			error: function(){
+				btn.prop('disabled', false).text('Read Data');
+				$('#clipsal2us-hint').text('Request failed - is Paula plugged in?');
+			}
+		});
+	});
+	$('#clipsal2us-copy-btn').on('click', function(){
+		copyTextToClipboard($('#clipsal2us-output').text(), $(this));
+	});
+	$('#clipsal2us-return-btn').on('click', function(){
+		$.ajax({url: "PaulaDeployerServlet", type: "POST", data: {formName: "ClipsalUart", action: "stop"}, dataType: "json"});
+		$('#clipsal2us-screen').hide();
+		$('#main-screen').show();
+	});
+
 	$('#return-btn').on('click', function(){
 		stopPolling();
 		$('#terminal-screen').hide();
@@ -1470,6 +1514,32 @@ function showClipsalReading(r, time){
 	}
 	$('#clipsal-hint').text(hints.join(' '));
 	appendClipsalLog(time + '  distance ' + distance + '   water ' + temp);
+}
+
+// Clipsal 2US: {distance1MM, ultrasonic1Ok, distance2MM, ultrasonic2Ok}
+function showClipsal2USReading(r, time){
+	var hints = [], texts = [];
+	[[1, '18', 'left'], [2, '33', 'right']].forEach(function(s){
+		var n = s[0], tile = $('#clipsal2us-distance' + n), text;
+		if(r['ultrasonic' + n + 'Ok'] == 1){
+			text = (r['distance' + n + 'MM'] / 10).toFixed(1) + ' cm';
+			tile.removeClass('pd-clipsal-bad').text(text);
+			if(r['distance' + n + 'MM'] == 0) hints.push('Ultrasonic ' + n + ' sends 0 mm: nothing in range, or closer than ~3 cm.');
+		}else{
+			text = 'no data';
+			tile.addClass('pd-clipsal-bad').text(text);
+			hints.push('No data from ultrasonic ' + n + ': check the ' + s[2] + ' Grove plug, the Paula pin ' + s[1] + ' to J2 "' + s[1] + '" wire, and that Paula\'s pin ' + s[1] + ' jumper is on DIGITAL.');
+		}
+		texts.push('US' + n + ' ' + text);
+	});
+	$('#clipsal2us-hint').text(hints.join(' '));
+	appendLogLine('#clipsal2us-output', time + '  ' + texts.join('   '));
+}
+
+function appendLogLine(selector, line){
+	var out = $(selector);
+	out.text(out.text() + (out.text() ? '\n' : '') + line);
+	out.scrollTop(out[0].scrollHeight);
 }
 
 function appendClipsalLog(line){

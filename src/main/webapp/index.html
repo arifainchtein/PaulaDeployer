@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/leaflet/leaflet.css">
 <!-- ?v= forces phones to reload these after a deploy - bump it with Constants.VERSION -->
-<link rel="stylesheet" href="css/style.css?v=0.9.7">
+<link rel="stylesheet" href="css/style.css?v=0.9.8">
 </head>
 <body>
 
@@ -37,6 +37,7 @@
     <button id="test-pressure-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Tank Pressure</button>
     <button id="test-soil-btn" type="button" class="btn btn-warning pd-toolbar-btn">Test Soil Sensor</button>
     <button id="clipsal-uart-btn" type="button" class="btn btn-warning pd-toolbar-btn">Clipsal Uart</button>
+    <button id="clipsal-2us-btn" type="button" class="btn btn-warning pd-toolbar-btn">Clipsal 2US</button>
     <button id="send-identity-btn" type="button" class="btn btn-warning pd-toolbar-btn">Send Identity Packet</button>
   </div>
   <div id="tile-grid" class="pd-tile-grid">
@@ -161,6 +162,55 @@
   <div class="pd-terminal-buttons">
     <button id="clipsal-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
     <button id="clipsal-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
+  </div>
+</div>
+
+<!-- Clipsal 2US (2026-11-07, ClipsalUartProcessingHandler action=read2us): a
+     ClipsallJunctionBoxWaterTrough_2US board - two DYP-A02 UART ultrasonics, left Grove (J1) on J2 "18",
+     right Grove (J7) on J2 "33". Paula.ino's ReadClipsal2US reads both. Leaving sends StopClipsal. -->
+<div id="clipsal2us-screen" class="pd-screen" style="display:none;">
+  <div class="pd-terminal-title">Clipsal 2US <span class="pd-sniffer-status">Two water troughs, two ultrasonics</span></div>
+  <div class="pd-clipsal-steps">
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">1</span>Jumpers</div>
+      <ul>
+        <li>Paula: both sensor jumpers (pin 18 and pin 33) on <strong>DIGITAL</strong>.</li>
+        <li>This board has no RS485 jumper.</li>
+      </ul>
+    </div>
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">2</span>Paula to the Clipsal 2US</div>
+      <table class="table table-sm pd-clipsal-table">
+        <thead><tr><th>Paula</th><th>Clipsal terminal</th></tr></thead>
+        <tbody>
+          <tr><td>V50</td><td>J5 <strong>V50</strong></td></tr>
+          <tr><td>GND</td><td>J5 <strong>GND</strong></td></tr>
+          <tr><td>pin 18</td><td>J2 <strong>18</strong> (left screw)</td></tr>
+          <tr><td>pin 33</td><td>J2 <strong>33</strong> (right screw)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pd-clipsal-step">
+      <div class="pd-clipsal-step-title"><span class="pd-clipsal-num">3</span>Sensors to the Clipsal 2US</div>
+      <table class="table table-sm pd-clipsal-table">
+        <thead><tr><th>Sensor</th><th>Clipsal socket</th></tr></thead>
+        <tbody>
+          <tr><td>Ultrasonic 1 (DYP-A02, UART)</td><td><strong>Left</strong> Grove socket (J1), read on pin 18</td></tr>
+          <tr><td>Ultrasonic 2 (DYP-A02, UART)</td><td><strong>Right</strong> Grove socket (J7), read on pin 33</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <button id="clipsal2us-read-btn" type="button" class="btn btn-warning w-100 pd-clipsal-read-btn">Read Data</button>
+  <div class="pd-clipsal-tiles">
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Ultrasonic 1 (pin 18)</div><div id="clipsal2us-distance1" class="pd-clipsal-tile-value">&ndash;</div></div>
+    <div class="pd-clipsal-tile"><div class="pd-clipsal-tile-label">Ultrasonic 2 (pin 33)</div><div id="clipsal2us-distance2" class="pd-clipsal-tile-value">&ndash;</div></div>
+  </div>
+  <div id="clipsal2us-hint" class="pd-clipsal-hint"></div>
+  <pre id="clipsal2us-output" class="pd-terminal pd-clipsal-log"></pre>
+  <div class="pd-terminal-buttons">
+    <button id="clipsal2us-copy-btn" type="button" class="btn btn-success pd-copy-terminal-btn">Copy</button>
+    <button id="clipsal2us-return-btn" type="button" class="btn btn-secondary pd-return-btn">Return</button>
   </div>
 </div>
 
@@ -394,7 +444,7 @@
 <script src="assets/js/jquery.min.js"></script>
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
 <script src="assets/leaflet/leaflet.js"></script>
-<script src="js/app.js?v=0.9.7"></script>
-<script src="js/signalmap.js?v=0.9.7"></script>
+<script src="js/app.js?v=0.9.8"></script>
+<script src="js/signalmap.js?v=0.9.8"></script>
 </body>
 </html>
