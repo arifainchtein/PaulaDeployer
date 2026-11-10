@@ -98,6 +98,21 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 				data.put("match", deviceSecret.equals(paulaSecret));
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 			}
+			if("relay".equals(action)){
+				// Relay mode (2026-11-10, Paula firmware 9+): Paula resends the data packets it hears, to
+				// test whether where it stands would make a good relay spot. Off again at every Paula boot.
+				String state = request.getParameter("state");
+				if(!"on".equals(state) && !"off".equals(state)){
+					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Expected state on or off.");
+				}
+				String reply = PaulaRadio.get().command("Relay#" + ("on".equals(state) ? 1 : 0), TIMEOUT_MILLISECONDS);
+				if(reply == null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in?");
+				for(String line : reply.split("\n")){
+					line = line.trim();
+					if(line.startsWith("RELAY {")) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", line.substring("RELAY ".length()));
+				}
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Unexpected answer from Paula (Paula firmware 9 or later needed): " + reply);
+			}
 			if("data".equals(action)){
 				// The "Data" button (2026-11-10): the device's last packet as Paula received it
 				// (Paula.ino GetNearbyPacket), decoded with whichever layout makes sense - see PacketDecoder.

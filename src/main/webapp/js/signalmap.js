@@ -51,6 +51,26 @@ $(function(){
 	});
 	// Same WiFi command as the Nearby Devices window (NearbyDevicesProcessingHandler)
 	$('#map-list').on('click', '.sm-data', function(){ showSignalMapData($(this).data('serial')); });
+	$('#map-position-set').on('click', function(){
+		var p = parsePosition($('#map-position-text').val());
+		if(!p){ alert('Could not read that position. Paste it as -37.17139, 144.48861 or 37°10\'17" S 144°29\'19" E.'); return; }
+		setSignalMapMe(p.lat, p.lon, 10, true);
+		try{ localStorage.setItem('paulaManualPosition', JSON.stringify(p)); }catch(e){}
+		if(smMap) smMap.setView([p.lat, p.lon], Math.max(smMap.getZoom(), 17));
+	});
+	$('#map-relay-btn').on('click', function(){
+		var $b = $(this).prop('disabled', true);
+		$.ajax({
+			type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "relay", state: smRelayOn ? 'off' : 'on'},
+			success: function(raw){
+				var result = JSON.parse(raw);
+				$b.prop('disabled', false);
+				if(result[STATUS_KEY] !== STATUS_SUCCESS){ alert(result[DATA_KEY]); return; }
+				showRelay(JSON.parse(result[DATA_KEY]));
+			},
+			error: function(){ $b.prop('disabled', false); alert('Request failed.'); }
+		});
+	});
 	$('#map-list').on('click', '.sm-wifi', function(){
 		var $b = $(this).prop('disabled', true);
 		$.ajax({
@@ -116,6 +136,11 @@ function initSignalMap(){
 		if(smMe && !smMe.manual) return;
 		setSignalMapMe(e.latlng.lat, e.latlng.lng, 10, true);
 	});
+	// The last typed-in position (2026-11-10), until the GPS or a tap replaces it
+	try{
+		var p = JSON.parse(localStorage.getItem('paulaManualPosition'));
+		if(p && !smMe) setSignalMapMe(p.lat, p.lon, 10, true);
+	}catch(e){}
 }
 
 // ---- Paula's position = the phone's
@@ -219,6 +244,8 @@ function loadSignalMapNearby(){
 			if(result[STATUS_KEY] !== STATUS_SUCCESS) return;
 			var listing = JSON.parse(result[DATA_KEY]), now = Date.now();
 			showNearbyClock(listing);
+			showNoise(listing.noise);
+			showRelay(listing.relay);
 			smNearby = {};
 			(listing.devices || []).forEach(function(d){
 				smNearby[d.serial] = d;
@@ -451,6 +478,47 @@ function dataTableHtml(fields, caption){
 	}).join('');
 	return (caption ? '<div class="sm-row-detail mt-2"><strong>' + escapeHtml(caption) + '</strong></div>' : '')
 		+ '<table class="table table-sm mb-0" style="font-size:0.85em">' + rows + '</table>';
+}
+
+// ---------------------------------------------------------------- Noise, relay, typed position (2026-11-10)
+var smRelayOn = false;
+
+function showNoise(n){
+	if(!n){ $('#map-noise').text('needs Paula firmware 9'); return; }
+	if(!n.samples){ $('#map-noise').text('measuring...'); return; }
+	$('#map-noise').html(n.now + ' dBm now &middot; last ' + n.samples + ' s: median ' + n.median + ', min ' + n.min + ', max ' + n.max);
+}
+
+function showRelay(r){
+	if(!r){ $('#map-relay-status').text('needs Paula firmware 9'); $('#map-relay-btn').prop('disabled', true); return; }
+	smRelayOn = !!r.on;
+	$('#map-relay-status').html(r.on ? '<span style="color:#2e7d32">&#9679; relaying</span> &middot; ' + r.sent + ' sent, ' + r.dup + ' already relayed'
+		+ (r.dropped ? ', ' + r.dropped + ' dropped (queue full)' : '') + (r.queued ? ', ' + r.queued + ' waiting' : '') : 'off' + (r.sent ? ' (' + r.sent + ' sent this time Paula was on)' : ''));
+	$('#map-relay-btn').prop('disabled', false).text(r.on ? 'Stop relaying' : 'Start relaying')
+		.toggleClass('btn-outline-primary', !r.on).toggleClass('btn-outline-danger', r.on);
+}
+
+// "-37.17139, 144.48861", "-37.17139 144.48861", or degrees/minutes/seconds as the iPhone Compass shows
+// them: 37°10'17" S 144°29'19" E (also with ′ ″ and decimal seconds). null if it can't be read.
+function parsePosition(text){
+	if(!text) return null;
+	var t = text.replace(/[′’]/g, "'").replace(/[″”]/g, '"').trim();
+	var dms = /(\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*'\s*)?(?:(\d+(?:\.\d+)?)\s*"\s*)?([NSEW])/gi, m, parts = [];
+	while((m = dms.exec(t)) !== null){
+		var v = parseFloat(m[1]) + (m[2] ? parseFloat(m[2]) / 60 : 0) + (m[3] ? parseFloat(m[3]) / 3600 : 0);
+		var hemi = m[4].toUpperCase();
+		parts.push({v: (hemi === 'S' || hemi === 'W') ? -v : v, axis: (hemi === 'N' || hemi === 'S') ? 'lat' : 'lon'});
+	}
+	var lat, lon;
+	if(parts.length === 2){
+		parts.forEach(function(p){ if(p.axis === 'lat') lat = p.v; else lon = p.v; });
+	}else{
+		var nums = t.match(/-?\d+(?:\.\d+)?/g);
+		if(!nums || nums.length !== 2) return null;
+		lat = parseFloat(nums[0]); lon = parseFloat(nums[1]);
+	}
+	if(lat === undefined || lon === undefined || isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+	return {lat: lat, lon: lon};
 }
 
 function showSignalMapCapture(capture){
