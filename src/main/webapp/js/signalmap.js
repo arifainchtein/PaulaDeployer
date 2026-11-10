@@ -492,8 +492,10 @@ function showNoise(n){
 function showRelay(r){
 	if(!r){ $('#map-relay-status').text('needs Paula firmware 9'); $('#map-relay-btn').prop('disabled', true); return; }
 	smRelayOn = !!r.on;
-	$('#map-relay-status').html(r.on ? '<span style="color:#2e7d32">&#9679; relaying</span> &middot; ' + r.sent + ' sent, ' + r.dup + ' already relayed'
-		+ (r.dropped ? ', ' + r.dropped + ' dropped (queue full)' : '') + (r.queued ? ', ' + r.queued + ' waiting' : '') : 'off' + (r.sent ? ' (' + r.sent + ' sent this time Paula was on)' : ''));
+	// 2026-11-11: ON/OFF in bold so the state reads at a glance (relay resets to OFF at every Paula boot)
+	$('#map-relay-status').html(r.on ? '<strong style="color:#2e7d32">&#9679; ON</strong> &middot; ' + r.sent + ' sent, ' + r.dup + ' already relayed'
+		+ (r.dropped ? ', ' + r.dropped + ' dropped (queue full)' : '') + (r.queued ? ', ' + r.queued + ' waiting' : '')
+		: '<strong style="color:#6c757d">OFF</strong>' + (r.sent ? ' (' + r.sent + ' sent before it was turned off)' : ''));
 	$('#map-relay-btn').prop('disabled', false).text(r.on ? 'Stop relaying' : 'Start relaying')
 		.toggleClass('btn-outline-primary', !r.on).toggleClass('btn-outline-danger', r.on);
 }
