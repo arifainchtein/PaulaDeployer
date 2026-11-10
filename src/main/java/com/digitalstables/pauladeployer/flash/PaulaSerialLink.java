@@ -55,11 +55,6 @@ public class PaulaSerialLink {
 			}
 		}
 		for (SerialPort candidate : candidates) {
-			// A board already probed and found not to be Paula isn't probed again (2026-11-11): every
-			// probe opens its port, which resets that ESP32 - with Paula unplugged, each device command
-			// would otherwise reset the device once for the probe and again for the command.
-			String key = usbKey(candidate);
-			if (NOT_PAULA.contains(key)) continue;
 			String response = sendCommandOnPort(candidate, "GetSwitchState", PROBE_TIMEOUT_MILLISECONDS);
 			// Paula.ino answers "Sleep=<n>" then "Ok-GetSwitchState" since its switch was removed - the
 			// old Left=/Right= check never matched again, so findWallyPort() always returned null.
@@ -67,21 +62,16 @@ public class PaulaSerialLink {
 				logger.debug("Resolved Wally on " + candidate.getSystemPortName());
 				return candidate;
 			}
-			// Only a definite "not Paula" is remembered - a Failure reply means another firmware
-			// answered. Silence may just be Paula still booting, so that board is probed again next time.
-			if (response != null && response.contains("Failure")) {
-				NOT_PAULA.add(key);
-				logger.info(candidate.getSystemPortName() + " (" + key + ") is a device, not Paula - not probed again");
-			}
+			// (2026-11-11: a "not Paula" cache lived here for a few hours - removed. Paula herself can answer
+			// Failure to a probe that lands while she boots, which marked her as a device until Tomcat
+			// restarted: Nearby Devices and relay then said "Paula not connected".)
 		}
 		logger.debug("No CP2104 candidate answered as Wally (" + candidates.size() + " candidate(s) probed)");
 		return null;
 	}
 
 	// The USB adapter's own serial number (each CP2104 has one) - so the same board keeps its key
-	// whichever ttyUSB name it gets, and a different board on the same name is a different key.
-	private static final java.util.Set<String> NOT_PAULA = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
-
+	// whichever ttyUSB name it gets (FirmwareFlasher's device names are kept by it).
 	static String usbKey(SerialPort port) {
 		String serial = port.getSerialNumber();
 		return (serial == null || serial.isEmpty() || "Unknown".equalsIgnoreCase(serial)) ? port.getSystemPortName() : serial;
