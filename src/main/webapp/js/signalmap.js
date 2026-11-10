@@ -50,6 +50,7 @@ $(function(){
 		signalMapPositions({action: 'clear', label: key});
 	});
 	// Same WiFi command as the Nearby Devices window (NearbyDevicesProcessingHandler)
+	$('#map-list').on('click', '.sm-data', function(){ showSignalMapData($(this).data('serial')); });
 	$('#map-list').on('click', '.sm-wifi', function(){
 		var $b = $(this).prop('disabled', true);
 		$.ajax({
@@ -392,7 +393,9 @@ function signalMapRowHtml(key, now){
 	// Daffodils: the Nearby Devices WiFi switch
 	var wifi = '';
 	var d = h && h.serial ? smNearby[h.serial] : null;
-	if(d){
+	// "Data" (2026-11-10): the last packet's values, with a layout check - see showSignalMapData
+	if(d) buttons = '<button type="button" class="btn btn-outline-primary btn-sm sm-btn sm-data" data-serial="' + escapeHtml(d.serial) + '">Data</button>' + buttons;
+	if(d && d.type !== 'ChinampaData'){   // Chinampa is listed for its Data only: always awake, no WiFi command, no battery
 		var on = d.wifi > 0, c = d.cmd, pending = c && c.state === 1;
 		wifi = '<div class="sm-row-wifi">' + (on ? '<span style="color:#2e7d32">&#10003; WiFi on</span> - ' + escapeHtml(NEARBY_WIFI[d.wifi] || ('status ' + d.wifi))
 			: '<span class="text-danger">&#10007; WiFi off</span>') + ' &middot; ' + Number(d.battery).toFixed(2) + ' V &middot; ' + (d.sleep > 0 ? 'asleep ' + d.sleep + ' s' : 'awake');
@@ -408,6 +411,46 @@ function signalMapRowHtml(key, now){
 		+ '<div class="sm-row-detail">' + line1 + '</div>'
 		+ '<div class="sm-row-detail">' + place + '</div>' + pingRowHtml(key) + wifi
 		+ '<div class="sm-row-buttons">' + buttons + '</div></div>';
+}
+
+// ---------------------------------------------------------------- Data (2026-11-10)
+// The device's last packet as Paula received it, every field (NearbyDevicesProcessingHandler action=data,
+// PacketDecoder). A packet that only makes sense in an older layout of the same size gets a warning:
+// the device's firmware is older than its receivers, which then read its values wrong (the Fish Tank's
+// "battery" of 144.47 V was its longitude) - so a strange reading is not mistaken for a failing sensor.
+function showSignalMapData(serial){
+	var $body = $('#data-modal-body').html('Asking Paula...');
+	$('#data-modal-title').text('Data');
+	bootstrap.Modal.getOrCreateInstance(document.getElementById('data-modal')).show();
+	$.ajax({
+		type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "data", serial: serial},
+		success: function(raw){
+			var result = JSON.parse(raw);
+			if(result[STATUS_KEY] !== STATUS_SUCCESS){ $body.html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>'); return; }
+			var p = JSON.parse(result[DATA_KEY]);
+			$('#data-modal-title').text(p.name || p.serial);
+			var html = '<div class="sm-row-detail">' + escapeHtml(p.type || '') + ', ' + p.size + ' bytes &middot; heard ' + p.ageSec + ' s ago &middot; R ' + p.rssi
+				+ (p.snr !== undefined ? ', SNR ' + Number(p.snr).toFixed(1) : '') + '</div>';
+			if(p.layoutOk){
+				html += '<div class="sm-row-detail" style="color:#2e7d32">&#10003; Layout ' + escapeHtml(p.layout || '') + '</div>';
+			}else{
+				html += '<div class="alert alert-warning py-2 my-2"><strong>Old firmware layout.</strong> ' + escapeHtml(p.note || '') + '</div>';
+			}
+			html += dataTableHtml(p.fields, p.layoutOk ? null : 'Decoded as ' + (p.struct || '') + ' ' + (p.layout || ''));
+			if(p.asCurrent) html += '<details class="mt-2"><summary>What the receivers read (current layout)</summary>' + dataTableHtml(p.asCurrent, null) + '</details>';
+			$body.html(html);
+		},
+		error: function(){ $body.html('<div class="text-danger">Request failed.</div>'); }
+	});
+}
+
+function dataTableHtml(fields, caption){
+	if(!fields) return '';
+	var rows = fields.map(function(f){
+		return '<tr><td style="white-space:nowrap">' + escapeHtml(f[0]) + '</td><td style="word-break:break-all">' + escapeHtml(String(f[1])) + '</td></tr>';
+	}).join('');
+	return (caption ? '<div class="sm-row-detail mt-2"><strong>' + escapeHtml(caption) + '</strong></div>' : '')
+		+ '<table class="table table-sm mb-0" style="font-size:0.85em">' + rows + '</table>';
 }
 
 function showSignalMapCapture(capture){

@@ -61,6 +61,22 @@
   </div>
 </div>
 
+<!-- Nearby Devices "Data" button (2026-11-10, signalmap.js showSignalMapData): the last packet's values + layout check -->
+<div class="modal fade" id="data-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="data-modal-title">Data</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="data-modal-body"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Version/date info - was always-visible header text, moved behind an (i) button (2026-09-05) -->
 <div class="modal fade" id="info-modal" tabindex="-1">
   <div class="modal-dialog modal-sm">
@@ -385,6 +401,8 @@
           <button type="button" class="btn btn-outline-primary btn-sm pd-shortcut-btn" data-command="GetTime">GetTime</button>
           <button type="button" class="btn btn-outline-primary btn-sm pd-shortcut-btn" data-command="printCSWData">CSWData</button>
           <button type="button" class="btn btn-outline-primary btn-sm pd-shortcut-btn" data-command="printCurrentDSDData">DSDData</button>
+          <!-- 2026-11-10: the device's own link counters (LinkHealthTracker) - Chinampa first -->
+          <button type="button" class="btn btn-outline-primary btn-sm pd-shortcut-btn" data-command="GetLinkHealth">LinkHealth</button>
         </div>
         <div class="input-group">
           <input type="text" id="send-command-text" class="form-control" placeholder="e.g. GetSensorData">
@@ -512,6 +530,6 @@
 <script src="assets/bootstrap/js/bootstrap.min.js"></script>
 <script src="assets/leaflet/leaflet.js"></script>
 <script src="js/app.js?v=0.9.9"></script>
-<script src="js/signalmap.js?v=0.9.9"></script>
+<script src="js/signalmap.js?v=0.9.10"></script>
 </body>
 </html>

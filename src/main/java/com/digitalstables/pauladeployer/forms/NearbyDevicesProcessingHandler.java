@@ -15,6 +15,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 import com.digitalstables.pauladeployer.flash.FirmwareFlasher;
+import com.digitalstables.pauladeployer.flash.PacketDecoder;
 import com.digitalstables.pauladeployer.flash.PaulaRadio;
 import com.digitalstables.pauladeployer.servlet.ProcessingFormHandler;
 import com.digitalstables.pauladeployer.utils.Constants;
@@ -96,6 +97,28 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 				JSONObject data = new JSONObject();
 				data.put("match", deviceSecret.equals(paulaSecret));
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
+			}
+			if("data".equals(action)){
+				// The "Data" button (2026-11-10): the device's last packet as Paula received it
+				// (Paula.ino GetNearbyPacket), decoded with whichever layout makes sense - see PacketDecoder.
+				String serial = request.getParameter("serial");
+				if(serial == null || !serial.matches("[0-9A-Fa-f]{16}")){
+					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Expected a 16-digit serial.");
+				}
+				String reply = PaulaRadio.get().command("GetNearbyPacket#" + serial.toUpperCase(), TIMEOUT_MILLISECONDS);
+				if(reply == null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in?");
+				for(String line : reply.split("\n")){
+					line = line.trim();
+					if(!line.startsWith("PACKET {")) continue;
+					JSONObject packet = new JSONObject(line.substring("PACKET ".length()));
+					JSONObject data = PacketDecoder.decode(PacketDecoder.hex(packet.getString("hex")), packet.optString("type"));
+					for(String k : new String[]{"serial", "name", "type", "size", "ageSec", "rssi", "snr"}){
+						if(packet.has(k)) data.put(k, packet.get(k));
+					}
+					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
+				}
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "",
+						reply.contains("Failure") ? "Paula has no packet from this device yet." : "Unexpected answer from Paula (Paula firmware 8 or later needed): " + reply);
 			}
 			if("setClock".equals(action)){
 				String error = PaulaRadio.get().setClockNow();
