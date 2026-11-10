@@ -42,6 +42,12 @@ public class PaulaSerialLink {
 				if (port.getSystemPortName().equals(held)) return port;
 			}
 		}
+		// paula.port set to a fixed path (Paula2: /dev/serial0 on the Pi header) - that is Paula, no probe.
+		if (PaulaPortConfig.isFixed()) {
+			SerialPort fixed = PaulaPortConfig.fixedPort();
+			if (fixed == null) logger.warn("paula.port=" + PaulaPortConfig.configured() + " in " + PaulaPortConfig.FILE + " cannot be opened");
+			return fixed;
+		}
 		List<SerialPort> candidates = new ArrayList<SerialPort>();
 		for (SerialPort port : SerialPort.getCommPorts()) {
 			if (port.getVendorID() == WALLY_VENDOR_ID && port.getProductID() == WALLY_PRODUCT_ID) {
@@ -49,20 +55,36 @@ public class PaulaSerialLink {
 			}
 		}
 		for (SerialPort candidate : candidates) {
-			if (probeForPaula(candidate)) {
+			// A board already probed and found not to be Paula isn't probed again (2026-11-11): every
+			// probe opens its port, which resets that ESP32 - with Paula unplugged, each device command
+			// would otherwise reset the device once for the probe and again for the command.
+			String key = usbKey(candidate);
+			if (NOT_PAULA.contains(key)) continue;
+			String response = sendCommandOnPort(candidate, "GetSwitchState", PROBE_TIMEOUT_MILLISECONDS);
+			// Paula.ino answers "Sleep=<n>" then "Ok-GetSwitchState" since its switch was removed - the
+			// old Left=/Right= check never matched again, so findWallyPort() always returned null.
+			if (response != null && response.contains("Ok-GetSwitchState")) {
 				logger.debug("Resolved Wally on " + candidate.getSystemPortName());
 				return candidate;
+			}
+			// Only a definite "not Paula" is remembered - a Failure reply means another firmware
+			// answered. Silence may just be Paula still booting, so that board is probed again next time.
+			if (response != null && response.contains("Failure")) {
+				NOT_PAULA.add(key);
+				logger.info(candidate.getSystemPortName() + " (" + key + ") is a device, not Paula - not probed again");
 			}
 		}
 		logger.debug("No CP2104 candidate answered as Wally (" + candidates.size() + " candidate(s) probed)");
 		return null;
 	}
 
-	private static boolean probeForPaula(SerialPort port) {
-		String response = sendCommandOnPort(port, "GetSwitchState", PROBE_TIMEOUT_MILLISECONDS);
-		// Paula.ino answers "Sleep=<n>" then "Ok-GetSwitchState" since its switch was removed - the
-		// old Left=/Right= check never matched again, so findWallyPort() always returned null.
-		return response != null && response.contains("Ok-GetSwitchState");
+	// The USB adapter's own serial number (each CP2104 has one) - so the same board keeps its key
+	// whichever ttyUSB name it gets, and a different board on the same name is a different key.
+	private static final java.util.Set<String> NOT_PAULA = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
+	static String usbKey(SerialPort port) {
+		String serial = port.getSerialNumber();
+		return (serial == null || serial.isEmpty() || "Unknown".equalsIgnoreCase(serial)) ? port.getSystemPortName() : serial;
 	}
 
 	public String setStatusText(String text) {

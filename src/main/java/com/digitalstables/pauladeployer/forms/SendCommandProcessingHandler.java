@@ -23,6 +23,7 @@ import com.digitalstables.pauladeployer.utils.Utils;
 public class SendCommandProcessingHandler extends ProcessingFormHandler{
 
 	private static final Logger logger = LogManager.getLogger("SendCommandProcessingHandler");
+	private static final int PAULA_TIMEOUT_MILLISECONDS = 10000;
 
 	public SendCommandProcessingHandler(HttpServletRequest req, HttpServletResponse res, ServletContext servletContext) throws ServletException{
 		super(req, res, servletContext);
@@ -35,18 +36,41 @@ public class SendCommandProcessingHandler extends ProcessingFormHandler{
 			if(command == null || command.trim().isEmpty()){
 				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No command given.");
 			}
+			// to=paula (2026-11-11): the Send Command box's "Paula" choice - over PaulaRadio's held port
+			// (no reset), since device commands never go to Paula's port any more.
+			if("paula".equalsIgnoreCase(request.getParameter("to"))){
+				logger.info("Sending command to Paula: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(command));
+				String reply = com.digitalstables.pauladeployer.flash.PaulaRadio.get().typedCommand(command, PAULA_TIMEOUT_MILLISECONDS);
+				if(reply == null){
+					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula not found - is her USB cable plugged into the Pi?");
+				}
+				JSONObject data = new JSONObject();
+				data.put("response", reply.isEmpty() ? "(Paula sent nothing back within " + (PAULA_TIMEOUT_MILLISECONDS / 1000) + " s)" : reply);
+				JSONObject target = new JSONObject();
+				target.put("paula", true);
+				String port = com.digitalstables.pauladeployer.flash.PaulaRadio.get().heldPortName();
+				target.put("port", port == null ? "" : port);
+				data.put("target", target);
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
+			}
 			logger.info("Sending command to target device: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(command));
 
 			FirmwareFlasher flasher = new FirmwareFlasher();
 			String result = flasher.sendCommandToTarget(command, true);
 			if(result == null){
 				logger.warn("No response from target device for command: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(command));
-				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "No target device responded - is it plugged in?");
+				// No port at all (only Paula plugged in, or nothing) vs a device that did not answer (2026-11-11)
+				String reason = flasher.lastTargetInfo().has("port")
+						? "The device on " + flasher.lastTargetInfo().getString("port") + " did not answer - is it running, jumper on USB?"
+						: flasher.noTargetReason();
+				return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", reason);
 			}
 			logger.debug("Response: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(result));
 
 			JSONObject data = new JSONObject();
 			data.put("response", result);
+			// Where it went (2026-11-11): {port, description, device, serialNumber, paulaPort, others}
+			data.put("target", flasher.lastTargetInfo());
 			toReturn = generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());
 		}catch(Exception e){
 			logger.warn(Utils.getStringException(e));

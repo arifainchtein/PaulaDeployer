@@ -41,34 +41,85 @@ public class FirmwareFlasher {
 		return findTargetPort(true);
 	}
 
+	// The device on the bench: any ttyUSB/ttyACM port that is not Paula's (2026-11-11). Paula's port
+	// comes from PaulaRadio - held open, the fixed paula.port (Paula2's /dev/serial0, never a
+	// ttyUSB/ttyACM anyway), or found once by its USB id + GetSwitchState and then held. Before this,
+	// Paula was only excluded with two or more ports plugged in, so with Paula alone every "device"
+	// command went to Paula. Now that case returns null ("nothing plugged in besides Paula").
+	// excludeWallyPort=false keeps the old "any port" behaviour for a Pi with no Paula at all.
+	// With two devices plugged in besides Paula the first one wins - lastTargetOthers says how many
+	// more there were, and the reply's destination line shows which port was used.
 	public SerialPort findTargetPort(boolean excludeWallyPort) {
-		java.util.List<String> candidateNames = new java.util.ArrayList<>();
+		String paulaName = excludeWallyPort ? PaulaRadio.get().paulaPortName() : null;
+		lastPaulaPort = paulaName;
+		SerialPort chosen = null;
+		int others = 0;
 		for (SerialPort port : SerialPort.getCommPorts()) {
 			String name = port.getSystemPortName();
-			if (name.startsWith("ttyUSB") || name.startsWith("ttyACM")) {
-				candidateNames.add(name);
+			if (!(name.startsWith("ttyUSB") || name.startsWith("ttyACM"))) continue;
+			if (name.equals(paulaName)) continue;
+			if (chosen == null) chosen = port;
+			else others++;
+		}
+		lastTargetOthers = others;
+		lastTarget = chosen;
+		if (others > 0) logger.warn(others + " more device(s) plugged in besides " + chosen.getSystemPortName() + " - using " + chosen.getSystemPortName());
+		return chosen;
+	}
+
+	// Where the last findTargetPort pointed - for the destination line under a command's reply.
+	private SerialPort lastTarget;
+	private String lastPaulaPort;
+	private int lastTargetOthers;
+
+	// Device names learnt from replies that pass through sendCommandToTarget (GetProductDefinition,
+	// GetSerialNumber - Inspect, deploys and the Send Command box all send them), keyed by the USB
+	// adapter's serial number, so naming a device costs no extra command (each command opens the
+	// port, which resets the ESP32).
+	private static final java.util.Map<String, String> DEVICE_NAMES = new java.util.concurrent.ConcurrentHashMap<String, String>();
+	private static final java.util.Map<String, String> DEVICE_SERIALS = new java.util.concurrent.ConcurrentHashMap<String, String>();
+
+	private static void learnIdentity(SerialPort port, String reply) {
+		if (port == null || reply == null) return;
+		String key = PaulaSerialLink.usbKey(port);
+		for (String line : reply.split("\n")) {
+			line = line.trim();
+			int at = line.indexOf("Ok-GetProductDefinition#");
+			if (at >= 0) {
+				// name#power#battery#pcbs#firmware#commission#ssid#wifipass#apssid#appass#host#mode#now#devicename#shortname#serial
+				String[] f = line.substring(at).split("#", -1);
+				String name = f.length > 1 ? f[1].trim() : "";
+				String deviceName = f.length > 14 ? f[14].trim() : "";
+				String label = deviceName.isEmpty() ? name : (name.isEmpty() || name.equals(deviceName) ? deviceName : deviceName + " (" + name + ")");
+				if (!label.isEmpty()) DEVICE_NAMES.put(key, label);
+				if (f.length > 16 && f[16].trim().matches("[0-9a-fA-F]{12}")) DEVICE_SERIALS.put(key, f[16].trim().toLowerCase());
+			} else if (line.matches("[0-9a-fA-F]{12}Ok")) {
+				DEVICE_SERIALS.put(key, line.substring(0, 12).toLowerCase());
 			}
 		}
-		// Only probe for Wally if there's more than one candidate plugged in. findWallyPort()
-		// matches purely on USB VID/PID (0x10C4/0xEA60 - the whole CP210x chip family), and this
-		// Paula's Daffodil target ALSO happens to use a CP2104 bridge, so with only one device
-		// attached that probe was opening/writing to the TARGET itself "to check if it's Wally".
-		// Confirmed 2026-09-05: that port-open pulses DTR/RTS and resets the target mid-Ping
-		// (a full WiFi-scan/AP-mode boot sequence showed up in the Ping transcript), and the
-		// probe's own unterminated "GetSwitchState" write got concatenated with the immediately
-		// following "Ping" write into "GetSwitchStatePing" server-side - "Command Not Found" -
-		// even though the flash itself had already succeeded and the device was fine.
-		SerialPort wally = (excludeWallyPort && candidateNames.size() > 1) ? PaulaSerialLink.findWallyPort() : null;
-		for (SerialPort port : SerialPort.getCommPorts()) {
-			String name = port.getSystemPortName();
-			if (wally != null && name.equals(wally.getSystemPortName())) {
-				continue;
-			}
-			if (candidateNames.contains(name)) {
-				return port;
-			}
+	}
+
+	// {port, description, device, serialNumber, paulaPort, others} for the last command's target -
+	// "device" is empty until the device has answered GetProductDefinition once (Inspect does that).
+	public org.json.JSONObject lastTargetInfo() {
+		org.json.JSONObject o = new org.json.JSONObject();
+		if (lastTarget != null) {
+			String key = PaulaSerialLink.usbKey(lastTarget);
+			o.put("port", lastTarget.getSystemPortName());
+			o.put("description", lastTarget.getPortDescription());
+			o.put("device", DEVICE_NAMES.getOrDefault(key, ""));
+			o.put("serialNumber", DEVICE_SERIALS.getOrDefault(key, ""));
 		}
-		return null;
+		o.put("paulaPort", lastPaulaPort == null ? "" : lastPaulaPort);
+		o.put("others", lastTargetOthers);
+		return o;
+	}
+
+	// Why there was no target, for the error shown instead of a reply.
+	public String noTargetReason() {
+		return lastPaulaPort != null
+				? "Nothing plugged in besides Paula (on " + lastPaulaPort + ") - the command was not sent."
+				: "No device plugged in - the command was not sent.";
 	}
 
 	public boolean flash(String binPath, String partitionsPath, String workDir, boolean excludeWallyPort, Consumer<String> onLine) throws IOException, InterruptedException {
@@ -198,6 +249,7 @@ public class FirmwareFlasher {
 			return null;
 		}
 		String result = sendCommand(port, command);
+		learnIdentity(port, result);
 		logger.debug("sendCommandToTarget() result: " + mask(result));
 		return result;
 	}

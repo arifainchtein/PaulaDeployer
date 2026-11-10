@@ -402,7 +402,8 @@ $(function(){
 		$('#calibrate-csw-reminder').hide();
 		$('#i2c-temp-reminder').hide();
 		$('#send-command-shortcuts').show();
-		$('#send-command-text').val('').prop('readonly', false);
+		sendCommandTo = 'device';
+		$('#send-command-text').val('').prop('readonly', false).attr('placeholder', 'e.g. GetSensorData');
 		$('#send-command-body').empty();
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
 	});
@@ -412,7 +413,21 @@ $(function(){
 			alert('Enter a command to send.');
 			return;
 		}
-		sendCommand(command);
+		sendCommand(command, sendCommandTo);
+	});
+
+	// The green header "Send Command" (2026-11-11): the same screen, but typed commands go to Paula
+	// herself (SendCommand to=paula, over her held port) - green buttons are about Paula, the rest
+	// about the device on the bench. No shortcut row: those are device commands.
+	$('#paula-command-btn').on('click', function(){
+		sendCommandTo = 'paula';
+		$('#send-command-title').text('Send Command to Paula');
+		$('#calibrate-csw-reminder').hide();
+		$('#i2c-temp-reminder').hide();
+		$('#send-command-shortcuts').hide();
+		$('#send-command-text').val('').prop('readonly', false).attr('placeholder', 'e.g. GetFirmware, Help, ScanI2C');
+		$('#send-command-body').empty();
+		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
 	});
 
 	// Shortcut buttons above the text field - fill the field and send immediately, same as
@@ -430,6 +445,7 @@ $(function(){
 		$('#calibrate-csw-reminder').show();
 		$('#i2c-temp-reminder').hide();
 		$('#send-command-shortcuts').hide();
+		sendCommandTo = 'device';
 		$('#send-command-text').val('CalibrateCSWReference').prop('readonly', true);
 		$('#send-command-body').html('<div class="pd-empty-message">Talking to the device...</div>');
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
@@ -444,6 +460,7 @@ $(function(){
 		$('#calibrate-csw-reminder').hide();
 		$('#i2c-temp-reminder').show();
 		$('#send-command-shortcuts').hide();
+		sendCommandTo = 'device';
 		$('#send-command-text').val('TestI2CTemperatureSensor').prop('readonly', true);
 		$('#send-command-body').html('<div class="pd-empty-message">Talking to the device...</div>');
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
@@ -1344,16 +1361,32 @@ function refreshStreamChat(){
 	});
 }
 
-function sendCommand(command){
+// Where a command went (2026-11-11), e.g. "→ ttyUSB1 · Chinampa · 3c71bf4a2b10 (Paula is on ttyUSB0)".
+// The device name is known once it has answered GetProductDefinition (run Inspect once after plugging in).
+function commandTargetHtml(t){
+	if(t && t.paula) return '<div class="pd-command-target">&rarr; <strong>Paula</strong>' + (t.port ? ' &middot; ' + escapeHtml(t.port) : '') + '</div>';
+	if(!t || !t.port) return '';
+	var who = t.device ? escapeHtml(t.device) : '<span class="text-muted">unidentified - run Inspect</span>';
+	var html = '<div class="pd-command-target">&rarr; <strong>' + escapeHtml(t.port) + '</strong> &middot; ' + who
+		+ (t.serialNumber ? ' &middot; ' + escapeHtml(t.serialNumber) : '')
+		+ (t.paulaPort ? ' <span class="text-muted">(Paula is on ' + escapeHtml(t.paulaPort) + ')</span>' : '') + '</div>';
+	if(t.others > 0) html += '<div class="text-danger">' + t.others + ' more device(s) plugged in - unplug the others to be sure which one answers.</div>';
+	return html;
+}
+
+// Where the Send Command screen's typed commands go: 'device' (the bench device) or 'paula' (2026-11-11)
+var sendCommandTo = 'device';
+
+function sendCommand(command, to){
 	$.ajax({
 		type: "POST",
 		url: "PaulaDeployerServlet",
-		data: {formName: "SendCommand", command: command},
+		data: {formName: "SendCommand", command: command, to: to || 'device'},
 		success: function(raw){
 			var result = JSON.parse(raw);
 			if(result[STATUS_KEY] === STATUS_SUCCESS){
 				var data = JSON.parse(result[DATA_KEY]);
-				$('#send-command-body').text(data.response);
+				$('#send-command-body').html(commandTargetHtml(data.target) + '<pre class="pd-command-text">' + escapeHtml(data.response) + '</pre>');
 			}else{
 				$('#send-command-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
 			}

@@ -80,9 +80,28 @@ public class PaulaRadio {
 		return port != null && port.isOpen() ? port.getSystemPortName() : null;
 	}
 
+	// Paula's port name, opening (and so finding) it if it isn't held yet - null when Paula isn't
+	// connected. FirmwareFlasher.findTargetPort uses it so a device command never goes to Paula
+	// (2026-11-11). With paula.port=auto and nothing held this probes the CP210x ports once; after
+	// that Paula stays held and nothing is probed again.
+	public synchronized String paulaPortName() {
+		return ensureOpen() ? port.getSystemPortName() : null;
+	}
+
 	// Sends a command and returns everything Paula printed up to its "Ok-"/"Failure" line, or
 	// null when Paula can't be found or doesn't answer within timeoutMillis.
 	public synchronized String command(String command, int timeoutMillis) {
+		return command(command, timeoutMillis, true);
+	}
+
+	// Send Command's "Paula" destination (2026-11-11): a typed command may be one Paula answers
+	// without an Ok-/Failure line (SetTime, GetCommandCode), so silence returns what arrived and
+	// keeps the port - closing it would reset Paula and lose the Nearby Devices she has heard.
+	public synchronized String typedCommand(String command, int timeoutMillis) {
+		return command(command, timeoutMillis, false);
+	}
+
+	private String command(String command, int timeoutMillis, boolean closeOnSilence) {
 		if (!ensureOpen()) return null;
 		try {
 			drain();  // debug output / boot messages since last time
@@ -101,6 +120,7 @@ public class PaulaRadio {
 				transcript.append(line);
 				if (line.startsWith("Ok-") || line.startsWith("Failure")) return transcript.toString();
 			}
+			if (!closeOnSilence) return transcript.toString();
 			logger.warn("No answer from Paula to " + command + " - closing the port");
 		} catch (IOException | InterruptedException e) {
 			logger.warn("Paula link failed: " + e.getMessage());

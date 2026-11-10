@@ -17,7 +17,12 @@
        a button that sets the Pi's clock from the internet. -->
   <div class="pd-header-clock">
     <div id="header-time" class="pd-header-time">&nbsp;</div>
-    <button id="internet-time-btn" type="button" class="btn btn-sm btn-ds-green pd-header-time-btn">Set Pi Time</button>
+    <!-- Green = Paula herself, not the device on the bench (2026-11-11): Send Command here opens the
+         same Send Command screen, but what you type goes to Paula. -->
+    <div class="pd-header-btns">
+      <button id="internet-time-btn" type="button" class="btn btn-sm btn-ds-green pd-header-time-btn">Set Pi Time</button>
+      <button id="paula-command-btn" type="button" class="btn btn-sm btn-ds-green pd-header-time-btn">Send Command</button>
+    </div>
   </div>
   <button id="info-btn" type="button" class="pd-info-btn">i</button>
 </div>

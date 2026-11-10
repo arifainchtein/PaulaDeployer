@@ -100,6 +100,16 @@ public class InspectProcessingHandler extends ProcessingFormHandler{
 				p.put("answered", isPaula ? paulaReply != null : (name.equals(targetPort) && targetAnswered));
 				ports.put(p);
 			}
+			// Paula2 (paula.port=/dev/serial0): Paula is on the header UART, not a ttyUSB/ttyACM - list it too
+			if(paulaPort != null && !paulaPort.startsWith("ttyUSB") && !paulaPort.startsWith("ttyACM")){
+				JSONObject p = new JSONObject();
+				p.put("name", paulaPort);
+				p.put("description", "Pi header UART (paula.port=" + com.digitalstables.pauladeployer.flash.PaulaPortConfig.configured() + ")");
+				p.put("usbId", "-");
+				p.put("role", "paula");
+				p.put("answered", paulaReply != null);
+				ports.put(p);
+			}
 			data.put("ports", ports);
 
 			return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_SUCCESS, "", data.toString());

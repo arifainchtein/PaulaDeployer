@@ -94,6 +94,25 @@ html, body {
   padding: 12px 4px;
 }
 
+/* Header's green Paula buttons side by side: Set Pi Time + Send Command (2026-11-11) */
+.pd-header-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Send Command destination line + reply (2026-11-11) */
+.pd-command-target {
+  color: #e5e7eb;
+  border-bottom: 1px solid #1f2937;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+.pd-command-target .text-muted { color: #9ca3af !important; }
+.pd-command-text {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .pd-command-response {
   margin-top: 14px;
   padding: 10px;
