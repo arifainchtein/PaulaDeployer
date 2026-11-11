@@ -105,7 +105,11 @@ public class NearbyDevicesProcessingHandler extends ProcessingFormHandler{
 				if(!"on".equals(state) && !"off".equals(state)){
 					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Expected state on or off.");
 				}
-				String reply = PaulaRadio.get().command("Relay#" + ("on".equals(state) ? 1 : 0), TIMEOUT_MILLISECONDS);
+				// strongDbm (2026-11-11, Paula firmware 11): packets heard at this level or stronger are not
+				// relayed; 0 = relay everything. Left out = Paula keeps hers (-80 after a boot).
+				String strong = request.getParameter("strongDbm");
+				String limit = strong != null && strong.matches("-?\\d{1,3}") ? "#" + strong : "";
+				String reply = PaulaRadio.get().command("Relay#" + ("on".equals(state) ? 1 : 0) + limit, TIMEOUT_MILLISECONDS);
 				if(reply == null) return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula did not answer - is it plugged in?");
 				for(String line : reply.split("\n")){
 					line = line.trim();

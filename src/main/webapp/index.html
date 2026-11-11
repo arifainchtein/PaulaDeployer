@@ -314,7 +314,15 @@
     <div class="sm-row-detail"><strong>Noise here:</strong> <span id="map-noise">-</span></div>
     <div class="sm-row-detail"><strong>Relay:</strong> <span id="map-relay-status">-</span></div>
     <div id="map-relay-ticker" class="sm-row-detail" style="display:none;color:#7048e8;"></div>
-    <div class="sm-row-buttons"><button id="map-relay-btn" type="button" class="btn btn-outline-primary btn-sm sm-btn">Start relaying</button></div>
+    <div class="sm-row-buttons"><button id="map-relay-btn" type="button" class="btn btn-outline-primary btn-sm sm-btn">Start relaying</button>
+      <!-- 2026-11-11 (Paula firmware 11): packets heard this strongly here are not relayed -->
+      <select id="map-relay-strong" class="form-select form-select-sm" style="display:inline-block;width:auto;" title="Don't relay packets Paula hears this strongly - the device reaches Annabelle without help">
+        <option value="-70">skip if stronger than -70 dBm</option>
+        <option value="-80" selected>skip if stronger than -80 dBm</option>
+        <option value="-90">skip if stronger than -90 dBm</option>
+        <option value="-100">skip if stronger than -100 dBm</option>
+        <option value="0">relay everything</option>
+      </select></div>
     <div style="font-size:12px;color:#6c757d;margin-top:4px;">Relay: Paula resends the data it hears (Chinampa, Daffodils, their vital signs and link health) so Annabelle gets a second chance. Stand it between the device and the house, then compare Annabelle's "Delivered here" with it on and off. Noise: lower is better; a rise of 10 dB or more means something nearby is interfering - walk towards higher readings to find it.</div>
   </div>
   <div id="map-position" class="sm-position"></div>

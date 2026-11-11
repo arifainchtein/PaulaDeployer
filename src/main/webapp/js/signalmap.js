@@ -58,10 +58,11 @@ $(function(){
 		try{ localStorage.setItem('paulaManualPosition', JSON.stringify(p)); }catch(e){}
 		if(smMap) smMap.setView([p.lat, p.lon], Math.max(smMap.getZoom(), 17));
 	});
+	$('#map-relay-strong').on('change', function(){ $(this).data('touched', true); });  // takes effect at the next Start
 	$('#map-relay-btn').on('click', function(){
 		var $b = $(this).prop('disabled', true);
 		$.ajax({
-			type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "relay", state: smRelayOn ? 'off' : 'on'},
+			type: "POST", url: "PaulaDeployerServlet", data: {formName: "NearbyDevices", action: "relay", state: smRelayOn ? 'off' : 'on', strongDbm: $('#map-relay-strong').val()},
 			success: function(raw){
 				var result = JSON.parse(raw);
 				$b.prop('disabled', false);
@@ -494,11 +495,17 @@ function showRelay(r){
 	smRelayOn = !!r.on;
 	// 2026-11-11: ON/OFF in bold so the state reads at a glance (relay resets to OFF at every Paula boot)
 	$('#map-relay-status').html(r.on ? '<strong style="color:#2e7d32">&#9679; ON</strong> &middot; ' + r.sent + ' sent, ' + r.dup + ' already relayed'
+		+ (r.strong ? ', ' + r.strong + ' not relayed (strong)' : '')
 		+ (r.dropped ? ', ' + r.dropped + ' dropped (queue full)' : '') + (r.queued ? ', ' + r.queued + ' waiting' : '')
 		: '<strong style="color:#6c757d">OFF</strong>' + (r.sent ? ' (' + r.sent + ' sent before it was turned off)' : ''));
 	// relay ticker (2026-11-11, Paula firmware 10): the last packet relayed, while it is recent
-	var ticker = r.on && r.last !== undefined && r.lastAgeSec < 30
-		? '&#8594; <strong>' + escapeHtml(r.last) + '</strong> relayed ' + (r.lastAgeSec < 2 ? 'just now' : r.lastAgeSec + ' s ago') : '';
+	var ago = r.lastAgeSec < 2 ? 'just now' : r.lastAgeSec + ' s ago';
+	var ticker = !(r.on && r.last !== undefined && r.lastAgeSec < 30) ? ''
+		: r.lastAction === 'strong'
+			? '&#8856; <strong>' + escapeHtml(r.last) + '</strong> received but not relayed - strong signal (' + r.lastRssi + ' dBm) &middot; ' + ago
+			: '&#8594; <strong>' + escapeHtml(r.last) + '</strong> relayed ' + ago;
+	// the strong-signal limit Paula is using (firmware 11+); the select keeps the user's choice otherwise
+	if(r.strongDbm !== undefined && !$('#map-relay-strong').data('touched')) $('#map-relay-strong').val(String(r.strongDbm));
 	$('#map-relay-ticker').html(ticker).toggle(!!ticker);
 	$('#map-relay-btn').prop('disabled', false).text(r.on ? 'Stop relaying' : 'Start relaying')
 		.toggleClass('btn-outline-primary', !r.on).toggleClass('btn-outline-danger', r.on);
