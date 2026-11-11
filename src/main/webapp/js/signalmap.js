@@ -496,6 +496,10 @@ function showRelay(r){
 	$('#map-relay-status').html(r.on ? '<strong style="color:#2e7d32">&#9679; ON</strong> &middot; ' + r.sent + ' sent, ' + r.dup + ' already relayed'
 		+ (r.dropped ? ', ' + r.dropped + ' dropped (queue full)' : '') + (r.queued ? ', ' + r.queued + ' waiting' : '')
 		: '<strong style="color:#6c757d">OFF</strong>' + (r.sent ? ' (' + r.sent + ' sent before it was turned off)' : ''));
+	// relay ticker (2026-11-11, Paula firmware 10): the last packet relayed, while it is recent
+	var ticker = r.on && r.last !== undefined && r.lastAgeSec < 30
+		? '&#8594; <strong>' + escapeHtml(r.last) + '</strong> relayed ' + (r.lastAgeSec < 2 ? 'just now' : r.lastAgeSec + ' s ago') : '';
+	$('#map-relay-ticker').html(ticker).toggle(!!ticker);
 	$('#map-relay-btn').prop('disabled', false).text(r.on ? 'Stop relaying' : 'Start relaying')
 		.toggleClass('btn-outline-primary', !r.on).toggleClass('btn-outline-danger', r.on);
 }
