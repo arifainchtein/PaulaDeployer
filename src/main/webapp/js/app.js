@@ -449,7 +449,7 @@ $(function(){
 		$('#send-command-text').val('CalibrateCSWReference').prop('readonly', true);
 		$('#send-command-body').html('<div class="pd-empty-message">Talking to the device...</div>');
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
-		sendCommand('CalibrateCSWReference');
+		sendCommand('CalibrateCSWReference', 'paula');
 	});
 
 	// "Test I2C Temp" - fixed command, auto-sent the moment the modal opens, same pattern as
@@ -464,15 +464,19 @@ $(function(){
 		$('#send-command-text').val('TestI2CTemperatureSensor').prop('readonly', true);
 		$('#send-command-body').html('<div class="pd-empty-message">Talking to the device...</div>');
 		bootstrap.Modal.getOrCreateInstance(document.getElementById('send-command-modal')).show();
-		sendCommand('TestI2CTemperatureSensor');
+		sendCommand('TestI2CTemperatureSensor', 'paula');
 	});
 
-	// "Test Flow Sensor" - two-step workflow against Paula.ino's LED-guided flow test. Start
-	// arms the device (SetTestMode#Flow then CalibrateFlowSensorXStart) - the operator then
-	// watches the DEVICE's own LEDs (15s red, 5s green) to know when to catch water, not
-	// anything on this screen, so Start's response is just a confirmation, not a live timer.
-	// Once water is caught and measured, Calculate sends the Stop command with that volume and
-	// shows the resulting qfactor.
+	// Every test button (the yellow toolbar ones) runs on Paula herself, to: 'paula' (2026-11-12):
+	// the sensor under test is wired to Paula, who does the testing - not to the target device.
+	// (Clipsal buttons already went through PaulaRadio. Exceptions, still to the target: Send Identity
+	// Packet, and Test Soil Sensor - an RS485 sensor, read by the device's ReadSoilSensor; Paula.ino has none.)
+	// "Test Flow Sensor" - Paula.ino's LED-guided flow test, run on Paula herself (to: 'paula',
+	// 2026-11-12 - it used to go to the target device, so with only Paula plugged in it failed with
+	// "nothing connected"). Start sends SetTestMode#Flow then CalibrateFlowSensorXStart, which
+	// blocks ~25 s on Paula (15s red, 10s green capture) and answers with the pulses counted in the
+	// 10 s green window - for a sensor already inline that count is the test. Catching the water is
+	// optional: Calculate sends the Stop command with the measured volume for a new qfactor.
 	var selectedFlowSensor = '1';
 	$(document).on('click', '.flow-sensor-select-btn', function(){
 		$('.flow-sensor-select-btn').removeClass('active');
@@ -493,19 +497,27 @@ $(function(){
 		$.ajax({
 			type: "POST",
 			url: "PaulaDeployerServlet",
-			data: {formName: "SendCommand", command: "SetTestMode#Flow"},
-			success: function(){
+			data: {formName: "SendCommand", to: "paula", command: "SetTestMode#Flow"},
+			success: function(raw0){
+				var r0 = JSON.parse(raw0);
+				if(r0[STATUS_KEY] !== STATUS_SUCCESS){
+					$('#flow-test-body').html('<div class="text-danger">' + escapeHtml(r0[DATA_KEY]) + '</div>');
+					btn.prop('disabled', false).text('Start Test');
+					return;
+				}
+				btn.text('Running - watch Paula\'s LEDs...');
+				$('#flow-test-body').html('<div class="pd-empty-message">Running: 15 s red, then 10 s green counting pulses...</div>');
 				$.ajax({
 					type: "POST",
 					url: "PaulaDeployerServlet",
-					data: {formName: "SendCommand", command: "CalibrateFlowSensor" + selectedFlowSensor + "Start"},
+					data: {formName: "SendCommand", to: "paula", timeoutSeconds: 45, command: "CalibrateFlowSensor" + selectedFlowSensor + "Start"},
 					success: function(raw){
 						var result = JSON.parse(raw);
 						if(result[STATUS_KEY] === STATUS_SUCCESS){
 							var data = JSON.parse(result[DATA_KEY]);
 							$('#flow-test-body').text(data.response);
 							$('#flow-test-volume-row').show();
-							btn.text('Test Started');
+							btn.prop('disabled', false).text('Run Again');
 						}else{
 							$('#flow-test-body').html('<div class="text-danger">' + escapeHtml(result[DATA_KEY]) + '</div>');
 							btn.prop('disabled', false).text('Start Test');
@@ -533,7 +545,7 @@ $(function(){
 		$.ajax({
 			type: "POST",
 			url: "PaulaDeployerServlet",
-			data: {formName: "SendCommand", command: "CalibrateFlowSensor" + selectedFlowSensor + "Stop#" + mL},
+			data: {formName: "SendCommand", to: "paula", command: "CalibrateFlowSensor" + selectedFlowSensor + "Stop#" + mL},
 			success: function(raw){
 				var result = JSON.parse(raw);
 				if(result[STATUS_KEY] === STATUS_SUCCESS){
@@ -558,7 +570,7 @@ $(function(){
 		$.ajax({
 			type: "POST",
 			url: "PaulaDeployerServlet",
-			data: {formName: "SendCommand", command: "GetUltrasonicReading"},
+			data: {formName: "SendCommand", to: "paula", command: "GetUltrasonicReading"},
 			success: function(raw){
 				var result = JSON.parse(raw);
 				if(result[STATUS_KEY] === STATUS_SUCCESS){
@@ -585,7 +597,7 @@ $(function(){
 		$.ajax({
 			type: "POST",
 			url: "PaulaDeployerServlet",
-			data: {formName: "SendCommand", command: "SetTestMode#Ultrasonic"},
+			data: {formName: "SendCommand", to: "paula", command: "SetTestMode#Ultrasonic"},
 			success: function(){
 				btn.hide();
 				pollUltrasonicReading();
@@ -601,7 +613,7 @@ $(function(){
 		if(ultrasonicPollTimer){
 			clearInterval(ultrasonicPollTimer);
 			ultrasonicPollTimer = null;
-			$.ajax({type: "POST", url: "PaulaDeployerServlet", data: {formName: "SendCommand", command: "SetTestMode#Flow"}});
+			$.ajax({type: "POST", url: "PaulaDeployerServlet", data: {formName: "SendCommand", to: "paula", command: "SetTestMode#Flow"}});
 		}
 	});
 
@@ -624,7 +636,7 @@ $(function(){
 		$.ajax({
 			type: "POST",
 			url: "PaulaDeployerServlet",
-			data: {formName: "SendCommand", command: "TestTankPressureSensor" + selectedPressureSensor},
+			data: {formName: "SendCommand", to: "paula", command: "TestTankPressureSensor" + selectedPressureSensor},
 			success: function(raw){
 				var result = JSON.parse(raw);
 				if(result[STATUS_KEY] === STATUS_SUCCESS){

@@ -40,12 +40,19 @@ public class SendCommandProcessingHandler extends ProcessingFormHandler{
 			// (no reset), since device commands never go to Paula's port any more.
 			if("paula".equalsIgnoreCase(request.getParameter("to"))){
 				logger.info("Sending command to Paula: " + com.digitalstables.pauladeployer.flash.FirmwareFlasher.mask(command));
-				String reply = com.digitalstables.pauladeployer.flash.PaulaRadio.get().typedCommand(command, PAULA_TIMEOUT_MILLISECONDS);
+				// timeoutSeconds (2026-11-12): the flow test's CalibrateFlowSensorXStart blocks ~25 s on Paula
+				// (red countdown + 10 s capture) before its Ok- line; 1..60 s, 10 s when not given
+				int timeoutMillis = PAULA_TIMEOUT_MILLISECONDS;
+				try{
+					String t = request.getParameter("timeoutSeconds");
+					if(t != null) timeoutMillis = Math.max(1, Math.min(60, Integer.parseInt(t.trim()))) * 1000;
+				}catch(NumberFormatException e){ /* keep the default */ }
+				String reply = com.digitalstables.pauladeployer.flash.PaulaRadio.get().typedCommand(command, timeoutMillis);
 				if(reply == null){
 					return generateFormResponseObject(Constants.PROCESSING_FORM_RESULT_STATUS_ERROR, "", "Paula not found - is her USB cable plugged into the Pi?");
 				}
 				JSONObject data = new JSONObject();
-				data.put("response", reply.isEmpty() ? "(Paula sent nothing back within " + (PAULA_TIMEOUT_MILLISECONDS / 1000) + " s)" : reply);
+				data.put("response", reply.isEmpty() ? "(Paula sent nothing back within " + (timeoutMillis / 1000) + " s)" : reply);
 				JSONObject target = new JSONObject();
 				target.put("paula", true);
 				String port = com.digitalstables.pauladeployer.flash.PaulaRadio.get().heldPortName();

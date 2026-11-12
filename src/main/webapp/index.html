@@ -448,8 +448,9 @@
 
 <!-- Flow sensor test/calibration - drives Paula.ino's one-person LED-guided workflow
      (SetTestMode#Flow, then CalibrateFlowSensorXStart - the operator catches water during the
-     device's own 15s red / 5s green LED sequence, not anything shown here - then
-     CalibrateFlowSensorXStop#<mL> once the volume is measured). -->
+     Paula's own 15s red / 10s green LED sequence; Start answers with the pulses counted in the
+     10s green window - then, optionally, CalibrateFlowSensorXStop#<mL> once the volume is measured).
+     Runs on Paula herself, the sensor wired to her pin 18 or 33 (2026-11-12). -->
 <div class="modal fade" id="flow-test-modal" tabindex="-1">
   <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content">
@@ -458,14 +459,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="pd-reminder">Make sure the jumper is on the <strong>digital</strong> header. Turn the water on <strong>before</strong> starting. Then watch the device's own LEDs, not this screen: 15s red (position your container), then 5s green - catch the water only during the green phase.</div>
+        <div class="pd-reminder">Make sure the jumper is on the <strong>digital</strong> header. Turn the water on <strong>before</strong> starting. Then watch Paula's LEDs: 15s red (get ready), then 10s green - the pulses are counted only during the green phase and shown here when it ends. If the sensor is inline, the pulse count is the test; if you catch the water during the green phase, enter its volume for a new qfactor.</div>
         <div class="pd-shortcut-row">
           <button type="button" class="btn btn-outline-primary flow-sensor-select-btn active" data-sensor="1">Sensor 1 (pin 18)</button>
           <button type="button" class="btn btn-outline-primary flow-sensor-select-btn" data-sensor="2">Sensor 2 (pin 33)</button>
         </div>
         <button id="flow-test-start-btn" type="button" class="btn btn-primary w-100">Start Test</button>
         <div id="flow-test-volume-row" class="input-group mt-3" style="display:none;">
-          <input type="number" id="flow-test-volume" class="form-control" placeholder="Measured volume (mL)">
+          <input type="number" id="flow-test-volume" class="form-control" placeholder="Measured volume (mL), optional">
           <button id="flow-test-stop-btn" type="button" class="btn btn-success">Calculate qfactor</button>
         </div>
         <div id="flow-test-body" class="pd-command-response"></div>
